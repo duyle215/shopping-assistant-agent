@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shopping Assistant - Tu van dien thoai AI</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: #f0f2f5;
+        color: #1c1c1e;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ── HEADER ── */
+      header {
+        background: #1a1a2e;
+        color: #fff;
+        padding: 14px 24px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        flex-shrink: 0;
+      }
+      header .logo {
+        font-size: 1.5rem;
+      }
+      header h1 {
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+      header .sub {
+        font-size: 0.78rem;
+        color: #aaa;
+        margin-left: auto;
+      }
+      .badge {
+        background: #16213e;
+        border: 1px solid #0f3460;
+        color: #e94560;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: 600;
+      }
+
+      /* ── TABS ── */
+      .tabs {
+        display: flex;
+        background: #fff;
+        border-bottom: 1px solid #ddd;
+        flex-shrink: 0;
+      }
+      .tab-btn {
+        padding: 10px 24px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-size: 0.9rem;
+        color: #666;
+        border-bottom: 3px solid transparent;
+        transition: all 0.2s;
+      }
+      .tab-btn.active {
+        color: #e94560;
+        border-bottom-color: #e94560;
+        font-weight: 600;
+      }
+      .tab-btn:hover:not(.active) {
+        background: #f5f5f5;
+      }
+
+      /* ── MAIN LAYOUT ── */
+      .tab-panel {
+        display: none;
+        flex: 1;
+        overflow: hidden;
+      }
+      .tab-panel.active {
+        display: flex;
+      }
+
+      /* ── CHAT PANEL ── */
+      #panel-chat {
+        flex-direction: column;
+      }
+
+      .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .msg {
+        display: flex;
+        gap: 10px;
+        max-width: 820px;
+      }
+      .msg.user {
+        align-self: flex-end;
+        flex-direction: row-reverse;
+      }
+      .msg.bot {
+        align-self: flex-start;
+      }
+
+      .avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+      }
+      .msg.user .avatar {
+        background: #e94560;
+      }
+      .msg.bot .avatar {
+        background: #1a1a2e;
+      }
+
+      .bubble {
+        padding: 12px 16px;
+        border-radius: 16px;
+        font-size: 0.9rem;
+        line-height: 1.55;
+        max-width: 680px;
+      }
+      .msg.user .bubble {
+        background: #e94560;
+        color: #fff;
+        border-bottom-right-radius: 4px;
+      }
+      .msg.bot .bubble {
+        background: #fff;
+        border: 1px solid #e8e8e8;
+        border-bottom-left-radius: 4px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      }
+
+      /* Markdown trong bubble */
+      .bubble h1,
+      .bubble h2,
+      .bubble h3 {
+        margin: 0.5em 0 0.3em;
+        font-size: 1em;
+      }
+      .bubble p {
+        margin-bottom: 0.5em;
+      }
+      .bubble ul,
+      .bubble ol {
+        padding-left: 1.4em;
+        margin-bottom: 0.5em;
+      }
+      .bubble li {
+        margin-bottom: 0.2em;
+      }
+      .bubble strong {
+        font-weight: 700;
+      }
+      .bubble table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 0.5em 0;
+        font-size: 0.85em;
+      }
+      .bubble th,
+      .bubble td {
+        border: 1px solid #ddd;
+        padding: 5px 10px;
+        text-align: left;
+      }
+      .bubble th {
+        background: #f5f5f5;
+        font-weight: 600;
+      }
+      .bubble code {
+        background: #f0f0f0;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 0.85em;
+      }
+      .bubble pre {
+        background: #f0f0f0;
+        padding: 10px;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin: 0.5em 0;
+      }
+
+      .meta {
+        font-size: 0.72rem;
+        color: #999;
+        margin-top: 4px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .meta .tool-tag {
+        background: #eef;
+        color: #667;
+        border-radius: 4px;
+        padding: 1px 6px;
+        font-size: 0.68rem;
+      }
+      .warning-msg {
+        background: #fff8e1;
+        border: 1px solid #ffca28;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 0.82rem;
+        color: #7b5b00;
+        margin-top: 6px;
+        max-width: 680px;
+      }
+
+      .typing {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 8px 0;
+      }
+      .typing span {
+        width: 8px;
+        height: 8px;
+        background: #aaa;
+        border-radius: 50%;
+        animation: blink 1.2s infinite;
+      }
+      .typing span:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .typing span:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      @keyframes blink {
+        0%,
+        80%,
+        100% {
+          opacity: 0.2;
+        }
+        40% {
+          opacity: 1;
+        }
+      }
+
+      /* ── INPUT BAR ── */
+      .input-bar {
+        padding: 14px 20px;
+        background: #fff;
+        border-top: 1px solid #e8e8e8;
+        display: flex;
+        gap: 10px;
+        flex-shrink: 0;
+      }
+      .input-bar textarea {
+        flex: 1;
+        padding: 10px 14px;
+        border: 1.5px solid #ddd;
+        border-radius: 12px;
+        font-size: 0.9rem;
+        font-family: inherit;
+        resize: none;
+        outline: none;
+        height: 44px;
+        transition: border-color 0.2s;
+        max-height: 120px;
+        overflow-y: auto;
+      }
+      .input-bar textarea:focus {
+        border-color: #e94560;
+      }
+      .send-btn {
+        padding: 0 20px;
+        border-radius: 12px;
+        background: #e94560;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 600;
+        transition: background 0.2s;
+      }
+      .send-btn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+      .send-btn:not(:disabled):hover {
+        background: #c73652;
+      }
+
+      /* ── PRODUCTS PANEL ── */
+      #panel-products {
+        flex-direction: column;
+        overflow-y: auto;
+        padding: 20px;
+        gap: 16px;
+      }
+      .products-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .products-header h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+      .refresh-btn {
+        padding: 6px 14px;
+        border: 1.5px solid #e94560;
+        color: #e94560;
+        background: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+      }
+      .refresh-btn:hover {
+        background: #e94560;
+        color: #fff;
+      }
+
+      .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .product-card {
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid #e8e8e8;
+        padding: 18px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        transition:
+          box-shadow 0.2s,
+          transform 0.2s;
+      }
+      .product-card:hover {
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+      }
+      .product-card .brand-badge {
+        display: inline-block;
+        font-size: 0.7rem;
+        background: #1a1a2e;
+        color: #fff;
+        padding: 2px 8px;
+        border-radius: 20px;
+        margin-bottom: 8px;
+      }
+      .product-card h3 {
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .product-card .price {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #e94560;
+        margin: 6px 0;
+      }
+      .product-card .specs {
+        font-size: 0.78rem;
+        color: #666;
+        margin-top: 8px;
+      }
+      .product-card .specs li {
+        list-style: none;
+        padding: 2px 0;
+      }
+      .product-card .specs li::before {
+        content: "- ";
+        color: #999;
+      }
+      .ask-btn {
+        margin-top: 12px;
+        width: 100%;
+        padding: 7px;
+        border: 1.5px solid #e94560;
+        color: #e94560;
+        background: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.82rem;
+        transition: all 0.2s;
+      }
+      .ask-btn:hover {
+        background: #e94560;
+        color: #fff;
+      }
+
+      /* ── HEALTH PANEL ── */
+      #panel-health {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 30px;
+      }
+      .health-card {
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid #e8e8e8;
+        padding: 20px 30px;
+        width: 100%;
+        max-width: 420px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      }
+      .health-card h2 {
+        margin-bottom: 14px;
+        font-size: 1rem;
+        font-weight: 700;
+      }
+      .health-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      .health-row:last-child {
+        border-bottom: none;
+      }
+      .health-row .ok {
+        color: #2e7d32;
+        font-weight: 700;
+      }
+      .health-row .fail {
+        color: #c62828;
+        font-weight: 700;
+      }
+      .health-refresh {
+        padding: 8px 20px;
+        background: #1a1a2e;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: background 0.2s;
+      }
+      .health-refresh:hover {
+        background: #0f3460;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- HEADER -->
+    <header>
+      <span class="logo">📱</span>
+      <h1>Shopping Assistant</h1>
+      <span class="badge">AI</span>
+      <span class="sub">Tu van dien thoai thong minh</span>
+    </header>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('chat')">
+        Chat AI
+      </button>
+      <button class="tab-btn" onclick="switchTab('products')">San pham</button>
+      <button class="tab-btn" onclick="switchTab('health')">He thong</button>
+    </div>
+
+    <!-- CHAT PANEL -->
+    <div id="panel-chat" class="tab-panel active">
+      <div class="chat-messages" id="chatMessages">
+        <div class="msg bot">
+          <div class="avatar">🤖</div>
+          <div>
+            <div class="bubble">
+              Xin chao! Toi la <strong>Shopping Assistant</strong>, tu van vien
+              dien thoai AI cua ban.<br /><br />
+              Ban co the hoi toi ve:<br />
+              - Tim dien thoai phu hop nhu cau<br />
+              - So sanh cac san pham<br />
+              - Thong so ky thuat chi tiet<br /><br />
+              <em
+                >Vi du: "Dien thoai Samsung pin trau duoi 25 trieu?", "So sanh
+                iPhone vs Galaxy"</em
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <textarea
+          id="userInput"
+          placeholder="Hoi ve dien thoai ban muon mua..."
+          rows="1"
+          onkeydown="handleKey(event)"
+          oninput="autoResize(this)"
+        ></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+          Gui
+        </button>
+      </div>
+    </div>
+
+    <!-- PRODUCTS PANEL -->
+    <div id="panel-products" class="tab-panel">
+      <div class="products-header">
+        <h2>Danh sach san pham</h2>
+        <button class="refresh-btn" onclick="loadProducts()">Tai lai</button>
+      </div>
+      <div class="products-grid" id="productsGrid">
+        <p style="color: #999; font-size: 0.9rem">Dang tai...</p>
+      </div>
+    </div>
+
+    <!-- HEALTH PANEL -->
+    <div id="panel-health" class="tab-panel">
+      <div class="health-card">
+        <h2>Trang thai he thong</h2>
+        <div id="healthRows">
+          <div class="health-row"><span>Dang kiem tra...</span></div>
+        </div>
+      </div>
+      <button class="health-refresh" onclick="loadHealth()">
+        Kiem tra lai
+      </button>
+    </div>
+
+    <script>
+      // ── TAB SWITCHING ────────────────────────────────────────────
+      function switchTab(tab) {
+        document.querySelectorAll(".tab-btn").forEach((b, i) => {
+          const names = ["chat", "products", "health"];
+          b.classList.toggle("active", names[i] === tab);
+        });
+        document
+          .querySelectorAll(".tab-panel")
+          .forEach((p) => p.classList.remove("active"));
+        document.getElementById("panel-" + tab).classList.add("active");
+
+        if (tab === "products") loadProducts();
+        if (tab === "health") loadHealth();
+      }
+
+      // ── CHAT ────────────────────────────────────────────────────
+      function autoResize(el) {
+        el.style.height = "44px";
+        el.style.height = Math.min(el.scrollHeight, 120) + "px";
+      }
+
+      function handleKey(e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      }
+
+      function appendMsg(role, html, meta) {
+        const wrap = document.getElementById("chatMessages");
+        const div = document.createElement("div");
+        div.className = "msg " + role;
+
+        const avatar = role === "user" ? "🧑" : "🤖";
+        let inner = `<div class="avatar">${avatar}</div><div>`;
+        inner += `<div class="bubble">${html}</div>`;
+
+        if (meta) {
+          inner += `<div class="meta">`;
+          if (meta.intent) inner += `<span>intent: ${meta.intent}</span>`;
+          (meta.tools_called || []).forEach((t) => {
+            inner += `<span class="tool-tag">${t}</span>`;
+          });
+          inner += `</div>`;
+          if (meta.warning) {
+            inner += `<div class="warning-msg">⚠ ${meta.warning}</div>`;
+          }
+        }
+
+        inner += "</div>";
+        div.innerHTML = inner;
+        wrap.appendChild(div);
+        wrap.scrollTop = wrap.scrollHeight;
+        return div;
+      }
+
+      function showTyping() {
+        const wrap = document.getElementById("chatMessages");
+        const div = document.createElement("div");
+        div.className = "msg bot";
+        div.id = "typing-indicator";
+        div.innerHTML = `
+    <div class="avatar">🤖</div>
+    <div class="bubble">
+      <div class="typing"><span></span><span></span><span></span></div>
+    </div>`;
+        wrap.appendChild(div);
+        wrap.scrollTop = wrap.scrollHeight;
+      }
+
+      function removeTyping() {
+        const el = document.getElementById("typing-indicator");
+        if (el) el.remove();
+      }
+
+      async function sendMessage() {
+        const input = document.getElementById("userInput");
+        const btn = document.getElementById("sendBtn");
+        const text = input.value.trim();
+        if (!text) return;
+
+        appendMsg("user", escapeHtml(text));
+        input.value = "";
+        input.style.height = "44px";
+        btn.disabled = true;
+        showTyping();
+
+        try {
+          const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text }),
+          });
+          const data = await res.json();
+          removeTyping();
+
+          if (data.error) {
+            appendMsg(
+              "bot",
+              `<span style="color:#c62828">Loi: ${escapeHtml(data.error)}</span>`,
+            );
+          } else {
+            const html = marked.parse(data.answer_markdown || "");
+            appendMsg("bot", html, {
+              intent: data.intent,
+              tools_called: data.tools_called,
+              warning: data.warning,
+            });
+          }
+        } catch (err) {
+          removeTyping();
+          appendMsg(
+            "bot",
+            `<span style="color:#c62828">Khong the ket noi den server.</span>`,
+          );
+        } finally {
+          btn.disabled = false;
+          input.focus();
+        }
+      }
+
+      function escapeHtml(str) {
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      // ── PRODUCTS ────────────────────────────────────────────────
+      async function loadProducts() {
+        const grid = document.getElementById("productsGrid");
+        grid.innerHTML =
+          '<p style="color:#999;font-size:.9rem">Dang tai...</p>';
+
+        try {
+          const res = await fetch("/api/products");
+          const data = await res.json();
+
+          if (data.error) {
+            grid.innerHTML = `<p style="color:red">${data.error}</p>`;
+            return;
+          }
+
+          grid.innerHTML = "";
+          (data.products || []).forEach((p) => {
+            const specsHtml = Object.entries(p.specs || {})
+              .map(([k, v]) => `<li><strong>${k}:</strong> ${v}</li>`)
+              .join("");
+
+            const card = document.createElement("div");
+            card.className = "product-card";
+            card.innerHTML = `
+        <span class="brand-badge">${p.brand}</span>
+        <h3>${p.name}</h3>
+        <div class="price">${Number(p.price).toLocaleString("vi-VN")} VND</div>
+        <ul class="specs">${specsHtml}</ul>
+        <button class="ask-btn" onclick="askAbout('${p.name}')">Hoi ve san pham nay</button>
+      `;
+            grid.appendChild(card);
+          });
+        } catch {
+          grid.innerHTML = '<p style="color:red">Khong the tai du lieu.</p>';
+        }
+      }
+
+      function askAbout(name) {
+        switchTab("chat");
+        document.getElementById("userInput").value =
+          `Cho toi biet chi tiet ve ${name}`;
+        document.getElementById("userInput").focus();
+      }
+
+      // ── HEALTH ──────────────────────────────────────────────────
+      async function loadHealth() {
+        const rows = document.getElementById("healthRows");
+        rows.innerHTML =
+          '<div class="health-row"><span>Dang kiem tra...</span></div>';
+
+        try {
+          const res = await fetch("/api/health");
+          const data = await res.json();
+
+          const keys = ["postgres", "qdrant", "ollama"];
+          const labels = {
+            postgres: "PostgreSQL",
+            qdrant: "Qdrant",
+            ollama: "Ollama",
+          };
+
+          rows.innerHTML = keys
+            .map((k) => {
+              const ok = data[k] === "OK";
+              const cls = ok ? "ok" : "fail";
+              const val = ok ? "OK" : data[k];
+              return `<div class="health-row"><span>${labels[k]}</span><span class="${cls}">${val}</span></div>`;
+            })
+            .join("");
+        } catch {
+          rows.innerHTML =
+            '<div class="health-row"><span style="color:red">Khong the ket noi server.</span></div>';
+        }
+      }
+    </script>
+  </body>
+</html>

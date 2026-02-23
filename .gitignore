@@ -1,0 +1,20 @@
+# Biến môi trường - KHÔNG đưa lên GitHub
+.env
+
+# Dữ liệu Qdrant local
+qdrant_data/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
