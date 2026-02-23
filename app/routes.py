@@ -88,6 +88,33 @@ def api_stock():
         return jsonify({"error": str(e)}), 500
 
 
+@api.route("/api/stock", methods=["PATCH"])
+def api_stock_update():
+    """Cap nhat so luong ton kho (nhan vien kho/demo)."""
+    data = request.get_json(force=True)
+    product_id = data.get("product_id")
+    new_stock = data.get("stock")
+
+    if product_id is None or new_stock is None:
+        return jsonify({"error": "Can truyen product_id va stock."}), 400
+
+    try:
+        product_id = int(product_id)
+        new_stock = int(new_stock)
+    except (ValueError, TypeError):
+        return jsonify({"error": "product_id va stock phai la so nguyen."}), 400
+
+    try:
+        from app.services.inventory import update_stock
+
+        result = update_stock(product_id, new_stock)
+        if "error" in result:
+            return jsonify(result), 400
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @api.get("/api/orders")
 def api_orders():
     """Xem danh sach don hang (cho nhan vien/admin)."""

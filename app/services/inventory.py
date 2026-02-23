@@ -225,6 +225,41 @@ def save_customer_info_to_order(
     }
 
 
+def update_stock(product_id: int, new_stock: int) -> dict:
+    """Cap nhat so luong ton kho cua san pham (nhan vien kho dung)."""
+    from sqlalchemy import create_engine, text
+
+    if new_stock < 0:
+        return {"error": "So luong ton kho khong the am."}
+
+    engine = create_engine(PG_URL, echo=False)
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT id, name, stock FROM products WHERE id = :pid"),
+            {"pid": product_id},
+        ).fetchone()
+
+        if not row:
+            return {"error": f"Khong tim thay san pham co ID = {product_id}"}
+
+        old_stock = int(row.stock)
+        conn.execute(
+            text("UPDATE products SET stock = :s WHERE id = :pid"),
+            {"s": new_stock, "pid": product_id},
+        )
+        conn.commit()
+
+    logger.info(f"[Stock Update] {row.name}: {old_stock} -> {new_stock}")
+
+    return {
+        "product_id": product_id,
+        "name": row.name,
+        "old_stock": old_stock,
+        "new_stock": new_stock,
+        "message": f"Da cap nhat {row.name}: {old_stock} -> {new_stock} chiec.",
+    }
+
+
 def get_all_stock() -> list[dict]:
     """Xem ton kho toan bo san pham."""
     from sqlalchemy import create_engine, text

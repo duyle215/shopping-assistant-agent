@@ -650,9 +650,16 @@
         "
       >
         <h2 style="font-size: 1.1rem; font-weight: 600">
-          Quan ly don hang & Ho tro
+          Quan ly kho hang, don hang & Ho tro
         </h2>
         <button class="refresh-btn" onclick="loadAdmin()">Tai lai</button>
+      </div>
+
+      <div class="admin-section">
+        <h2>Ton kho <span id="stockCount" class="count-badge">0</span></h2>
+        <div id="stockTable">
+          <p style="color: #999; font-size: 0.85rem">Dang tai...</p>
+        </div>
       </div>
 
       <div class="admin-section">
@@ -904,6 +911,50 @@
 
       // ── ADMIN ──────────────────────────────────────────────────
       async function loadAdmin() {
+        // Load stock
+        try {
+          const sRes = await fetch("/api/stock");
+          const sData = await sRes.json();
+          const sEl = document.getElementById("stockTable");
+          document.getElementById("stockCount").textContent = sData.total || 0;
+
+          if (!sData.stock || sData.stock.length === 0) {
+            sEl.innerHTML =
+              '<p style="color:#999;font-size:.85rem">Chua co san pham.</p>';
+          } else {
+            let html = '<table class="admin-table"><thead><tr>';
+            html +=
+              "<th>ID</th><th>San pham</th><th>Thuong hieu</th><th>Gia</th><th>Ton kho</th><th>Thao tac</th>";
+            html += "</tr></thead><tbody>";
+            sData.stock.forEach((s) => {
+              const cls =
+                s.stock === 0
+                  ? "stock-out"
+                  : s.stock <= 5
+                    ? "stock-low"
+                    : "stock-ok";
+              html += `<tr>
+                <td>${s.product_id}</td>
+                <td>${s.name}</td>
+                <td>${s.brand}</td>
+                <td>${Number(s.price).toLocaleString("vi-VN")} VND</td>
+                <td><span class="stock-badge ${cls}" style="display:inline">${s.stock}</span></td>
+                <td>
+                  <input type="number" id="stock-input-${s.product_id}" value="${s.stock}"
+                    min="0" style="width:60px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;text-align:center">
+                  <button class="refresh-btn" style="font-size:.75rem;padding:3px 8px;margin-left:4px"
+                    onclick="updateStock(${s.product_id})">Cap nhat</button>
+                </td>
+              </tr>`;
+            });
+            html += "</tbody></table>";
+            sEl.innerHTML = html;
+          }
+        } catch {
+          document.getElementById("stockTable").innerHTML =
+            '<p style="color:red">Loi tai ton kho.</p>';
+        }
+
         // Load orders
         try {
           const res = await fetch("/api/orders");
@@ -979,6 +1030,32 @@
         } catch {
           document.getElementById("supportTable").innerHTML =
             '<p style="color:red">Loi tai yeu cau ho tro.</p>';
+        }
+      }
+
+      async function updateStock(productId) {
+        const input = document.getElementById(`stock-input-${productId}`);
+        const newStock = parseInt(input.value, 10);
+        if (isNaN(newStock) || newStock < 0) {
+          alert("So luong phai la so nguyen >= 0");
+          return;
+        }
+        try {
+          const res = await fetch("/api/stock", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ product_id: productId, stock: newStock }),
+          });
+          const data = await res.json();
+          if (data.error) {
+            alert("Loi: " + data.error);
+          } else {
+            alert(data.message);
+            loadAdmin();
+            loadProducts();
+          }
+        } catch {
+          alert("Khong the cap nhat ton kho.");
         }
       }
 
