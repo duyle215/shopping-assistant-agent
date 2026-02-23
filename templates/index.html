@@ -406,6 +406,84 @@
         background: #e94560;
         color: #fff;
       }
+      .stock-badge {
+        display: inline-block;
+        font-size: 0.72rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: 600;
+        margin-left: 6px;
+      }
+      .stock-ok {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+      .stock-low {
+        background: #fff8e1;
+        color: #f57f17;
+      }
+      .stock-out {
+        background: #ffebee;
+        color: #c62828;
+      }
+
+      /* ── ADMIN PANEL ── */
+      #panel-admin {
+        flex-direction: column;
+        overflow-y: auto;
+        padding: 20px;
+        gap: 20px;
+      }
+      .admin-section {
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid #e8e8e8;
+        padding: 18px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      }
+      .admin-section h2 {
+        font-size: 1rem;
+        font-weight: 700;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .admin-section h2 .count-badge {
+        background: #e94560;
+        color: #fff;
+        font-size: 0.72rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+      }
+      .admin-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.82rem;
+      }
+      .admin-table th,
+      .admin-table td {
+        border: 1px solid #eee;
+        padding: 8px 10px;
+        text-align: left;
+      }
+      .admin-table th {
+        background: #f5f5f5;
+        font-weight: 600;
+        font-size: 0.78rem;
+        color: #666;
+      }
+      .admin-table tr:hover {
+        background: #fafafa;
+      }
+      .status-confirmed {
+        color: #2e7d32;
+        font-weight: 600;
+      }
+      .status-pending {
+        color: #f57f17;
+        font-weight: 600;
+      }
 
       /* ── HEALTH PANEL ── */
       #panel-health {
@@ -459,6 +537,34 @@
       .health-refresh:hover {
         background: #0f3460;
       }
+
+      .new-chat-btn {
+        margin-left: auto;
+        margin-right: 12px;
+        padding: 6px 14px;
+        border: 1.5px solid #e94560;
+        color: #e94560;
+        background: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 600;
+        transition: all 0.2s;
+        align-self: center;
+      }
+      .new-chat-btn:hover {
+        background: #e94560;
+        color: #fff;
+      }
+
+      .session-info {
+        font-size: 0.68rem;
+        color: #999;
+        text-align: center;
+        padding: 4px;
+        background: #f8f8f8;
+        border-bottom: 1px solid #eee;
+      }
     </style>
   </head>
   <body>
@@ -476,7 +582,15 @@
         Chat AI
       </button>
       <button class="tab-btn" onclick="switchTab('products')">San pham</button>
+      <button class="tab-btn" onclick="switchTab('admin')">Quan ly</button>
       <button class="tab-btn" onclick="switchTab('health')">He thong</button>
+      <button
+        class="new-chat-btn"
+        onclick="newChat()"
+        title="Bat dau hoi thoai moi"
+      >
+        + Hoi thoai moi
+      </button>
     </div>
 
     <!-- CHAT PANEL -->
@@ -526,6 +640,38 @@
       </div>
     </div>
 
+    <!-- ADMIN PANEL -->
+    <div id="panel-admin" class="tab-panel">
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        "
+      >
+        <h2 style="font-size: 1.1rem; font-weight: 600">
+          Quan ly don hang & Ho tro
+        </h2>
+        <button class="refresh-btn" onclick="loadAdmin()">Tai lai</button>
+      </div>
+
+      <div class="admin-section">
+        <h2>Don hang <span id="ordersCount" class="count-badge">0</span></h2>
+        <div id="ordersTable">
+          <p style="color: #999; font-size: 0.85rem">Chua co don hang.</p>
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <h2>
+          Yeu cau ho tro <span id="supportCount" class="count-badge">0</span>
+        </h2>
+        <div id="supportTable">
+          <p style="color: #999; font-size: 0.85rem">Chua co yeu cau.</p>
+        </div>
+      </div>
+    </div>
+
     <!-- HEALTH PANEL -->
     <div id="panel-health" class="tab-panel">
       <div class="health-card">
@@ -540,10 +686,36 @@
     </div>
 
     <script>
+      // ── SESSION MANAGEMENT ──────────────────────────────────────
+      let sessionId = localStorage.getItem("session_id") || crypto.randomUUID();
+      localStorage.setItem("session_id", sessionId);
+
+      function newChat() {
+        // Xoa session tren server
+        fetch("/api/session/clear", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId }),
+        }).catch(() => {});
+
+        // Tao session moi
+        sessionId = crypto.randomUUID();
+        localStorage.setItem("session_id", sessionId);
+
+        // Xoa chat messages (giu lai welcome message)
+        const wrap = document.getElementById("chatMessages");
+        const msgs = wrap.querySelectorAll(".msg");
+        msgs.forEach((m, i) => {
+          if (i > 0) m.remove();
+        });
+
+        switchTab("chat");
+      }
+
       // ── TAB SWITCHING ────────────────────────────────────────────
       function switchTab(tab) {
         document.querySelectorAll(".tab-btn").forEach((b, i) => {
-          const names = ["chat", "products", "health"];
+          const names = ["chat", "products", "admin", "health"];
           b.classList.toggle("active", names[i] === tab);
         });
         document
@@ -553,6 +725,7 @@
 
         if (tab === "products") loadProducts();
         if (tab === "health") loadHealth();
+        if (tab === "admin") loadAdmin();
       }
 
       // ── CHAT ────────────────────────────────────────────────────
@@ -631,7 +804,7 @@
           const res = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: text }),
+            body: JSON.stringify({ message: text, session_id: sessionId }),
           });
           const data = await res.json();
           removeTyping();
@@ -642,6 +815,11 @@
               `<span style="color:#c62828">Loi: ${escapeHtml(data.error)}</span>`,
             );
           } else {
+            // Cap nhat session_id tu server (phong truong hop server tao moi)
+            if (data.session_id) {
+              sessionId = data.session_id;
+              localStorage.setItem("session_id", sessionId);
+            }
             const html = marked.parse(data.answer_markdown || "");
             appendMsg("bot", html, {
               intent: data.intent,
@@ -691,8 +869,20 @@
 
             const card = document.createElement("div");
             card.className = "product-card";
+
+            let stockCls = "stock-ok";
+            let stockText = `Con ${p.stock} chiec`;
+            if (p.stock === 0) {
+              stockCls = "stock-out";
+              stockText = "Het hang";
+            } else if (p.stock <= 5) {
+              stockCls = "stock-low";
+              stockText = `Chi con ${p.stock}`;
+            }
+
             card.innerHTML = `
         <span class="brand-badge">${p.brand}</span>
+        <span class="stock-badge ${stockCls}">${stockText}</span>
         <h3>${p.name}</h3>
         <div class="price">${Number(p.price).toLocaleString("vi-VN")} VND</div>
         <ul class="specs">${specsHtml}</ul>
@@ -712,6 +902,86 @@
         document.getElementById("userInput").focus();
       }
 
+      // ── ADMIN ──────────────────────────────────────────────────
+      async function loadAdmin() {
+        // Load orders
+        try {
+          const res = await fetch("/api/orders");
+          const data = await res.json();
+          const el = document.getElementById("ordersTable");
+          document.getElementById("ordersCount").textContent = data.total || 0;
+
+          if (!data.orders || data.orders.length === 0) {
+            el.innerHTML =
+              '<p style="color:#999;font-size:.85rem">Chua co don hang nao.</p>';
+          } else {
+            let html = '<table class="admin-table"><thead><tr>';
+            html +=
+              "<th>ID</th><th>San pham</th><th>SL</th><th>Khach hang</th><th>SDT</th><th>Trang thai</th><th>Ghi chu</th><th>Thoi gian</th>";
+            html += "</tr></thead><tbody>";
+            data.orders.forEach((o) => {
+              const stCls =
+                o.status === "confirmed"
+                  ? "status-confirmed"
+                  : "status-pending";
+              const stLabel =
+                o.status === "confirmed" ? "Da xac nhan" : "Cho restock";
+              html += `<tr>
+                <td>${o.id}</td>
+                <td>${o.product_name}</td>
+                <td>${o.quantity}</td>
+                <td>${o.customer_name || "-"}</td>
+                <td>${o.customer_phone || "-"}</td>
+                <td class="${stCls}">${stLabel}</td>
+                <td style="max-width:200px;font-size:.78rem">${o.note || "-"}</td>
+                <td style="font-size:.78rem">${o.created_at}</td>
+              </tr>`;
+            });
+            html += "</tbody></table>";
+            el.innerHTML = html;
+          }
+        } catch {
+          document.getElementById("ordersTable").innerHTML =
+            '<p style="color:red">Loi tai don hang.</p>';
+        }
+
+        // Load support requests
+        try {
+          const res = await fetch("/api/support-requests");
+          const data = await res.json();
+          const el = document.getElementById("supportTable");
+          document.getElementById("supportCount").textContent = data.total || 0;
+
+          if (!data.requests || data.requests.length === 0) {
+            el.innerHTML =
+              '<p style="color:#999;font-size:.85rem">Chua co yeu cau ho tro nao.</p>';
+          } else {
+            let html = '<table class="admin-table"><thead><tr>';
+            html +=
+              "<th>ID</th><th>Ly do</th><th>Khach hang</th><th>SDT</th><th>Trang thai</th><th>Thoi gian</th>";
+            html += "</tr></thead><tbody>";
+            data.requests.forEach((r) => {
+              const stCls =
+                r.status === "resolved" ? "status-confirmed" : "status-pending";
+              const stLabel = r.status === "resolved" ? "Da xu ly" : "Dang cho";
+              html += `<tr>
+                <td>${r.id}</td>
+                <td style="max-width:300px">${r.reason}</td>
+                <td>${r.customer_name || "-"}</td>
+                <td>${r.customer_phone || "-"}</td>
+                <td class="${stCls}">${stLabel}</td>
+                <td style="font-size:.78rem">${r.created_at}</td>
+              </tr>`;
+            });
+            html += "</tbody></table>";
+            el.innerHTML = html;
+          }
+        } catch {
+          document.getElementById("supportTable").innerHTML =
+            '<p style="color:red">Loi tai yeu cau ho tro.</p>';
+        }
+      }
+
       // ── HEALTH ──────────────────────────────────────────────────
       async function loadHealth() {
         const rows = document.getElementById("healthRows");
@@ -722,11 +992,10 @@
           const res = await fetch("/api/health");
           const data = await res.json();
 
-          const keys = ["postgres", "qdrant", "ollama"];
+          const keys = ["postgres", "qdrant"];
           const labels = {
             postgres: "PostgreSQL",
             qdrant: "Qdrant",
-            ollama: "Ollama",
           };
 
           rows.innerHTML = keys
