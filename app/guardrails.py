@@ -101,9 +101,8 @@ def check_output(response: str) -> GuardrailResult:
             reason="Cau tra loi trong.",
         )
 
-    lower = response.lower()
     for pattern in LEAKED_PATTERNS:
-        if re.search(pattern, lower):
+        if re.search(pattern, response, re.IGNORECASE):
             return GuardrailResult(
                 passed=False,
                 reason="Cau tra loi co the chua thong tin noi bo he thong.",

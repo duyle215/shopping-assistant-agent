@@ -1,222 +1,110 @@
-# Shopping Assistant AI Agent
+# Shopping Assistant Agent
 
-Chatbot tu van mua dien thoai thong minh, xay dung theo chuan OpenAI Agents SDK voi:
+A phone-shopping chatbot built directly on **OpenAI function calling** (no agent framework). The model decides which tools to call and loops until it can answer. Two specialised agents hand off to each other, conversations are remembered per session, and guardrails check every input and output. Product questions are answered with **semantic search over a vector database**, while stock, orders, and support requests live in **PostgreSQL**.
 
-- **Agent Loop**: LLM tu quyet dinh goi tool, lap lai cho den khi xong
-- **Handoffs**: SalesAgent <-> CompareAgent uy quyen cho nhau
-- **Sessions**: Nho lich su hoi thoai (hieu "cai do" la gi)
-- **Guardrails**: Kiem tra input/output, chan prompt injection
-- **MCP Inventory**: Quan ly ton kho, dat hang, restock
-- **Human-in-the-Loop**: Chuyen tiep sang nhan vien khi can
+The chatbot answers in Vietnamese.
 
-## Kien truc he thong
+## Features
+
+- **Agent loop:** `gpt-4.1-mini` picks tools, reads their results, and repeats (up to 10 rounds) until it returns a final answer.
+- **Handoffs:** a `SalesAgent` (search, stock, orders) and a `CompareAgent` (side-by-side comparisons) transfer the conversation to each other through dedicated handoff tools. Each agent has its own system prompt and tool set.
+- **RAG product search:** product descriptions are embedded with `text-embedding-3-small` and stored in Qdrant. Search supports an optional brand filter.
+- **Transactional tools:** check stock, place orders (stock is deducted if available, otherwise a pending order and a restock request are created), and save customer details on an order.
+- **Human-in-the-loop:** the agent can open a support request for staff when it cannot help.
+- **Sessions:** the last 20 turns of each conversation are kept for one hour, so follow-ups like "how much is that one?" resolve correctly.
+- **Guardrails:** inputs are checked for length and common prompt-injection patterns. Outputs are checked for leaked internals (system prompt, vector-store details, API keys).
+- **Web UI:** Flask app with four tabs (chat, products, staff view of orders and support requests, system health) and a REST API.
+
+## Architecture
 
 ```
-Nguoi dung (Browser)
-     |
-     v
- Flask Web UI  (port 5000)
-     |
-     v
- ShoppingAgent  (Agent Loop - gpt-4.1-mini function calling)
-     |
-     +---> Tool: search_products ----> OpenAI Embedding --> Qdrant
-     +---> Tool: get_product_details -> PostgreSQL
-     +---> Tool: check_inventory -----> PostgreSQL
-     +---> Tool: place_order ---------> PostgreSQL
-     +---> Tool: request_human_support -> PostgreSQL
-     +---> Tool: save_customer_info ---> PostgreSQL
-     +---> Handoff: transfer_to_compare_agent / transfer_to_sales_agent
-     |
-     v
- Tra loi Markdown --> Hien thi tren giao dien
+Browser ──► Flask (routes.py) ──► ShoppingAgent.run()
+                                     │
+                    input guardrail ─┤
+                                     ▼
+                     ┌──────── agent loop (gpt-4.1-mini) ◄────────┐
+                     │   tool calls                               │ tool results
+                     ▼                                            │
+   SalesAgent ◄─ handoff ─► CompareAgent                           │
+     ├─ search_products ─────────► OpenAI embeddings ─► Qdrant ───┤
+     ├─ get_product_details ─────► PostgreSQL ────────────────────┤
+     ├─ check_inventory / place_order ─► PostgreSQL ──────────────┤
+     ├─ save_customer_info ──────► PostgreSQL ────────────────────┤
+     └─ request_human_support ───► PostgreSQL ────────────────────┘
+                                     │
+                   output guardrail ─┤
+                                     ▼
+                         Markdown answer + session update
 ```
 
-## Stack cong nghe
+| Tool | SalesAgent | CompareAgent |
+| --- | :---: | :---: |
+| `search_products` | ✓ | ✓ |
+| `get_product_details` | ✓ | ✓ |
+| `check_inventory` | ✓ | |
+| `place_order` | ✓ | |
+| `save_customer_info` | ✓ | ✓ |
+| `request_human_support` | ✓ | ✓ |
+| `transfer_to_compare_agent` | ✓ | |
+| `transfer_to_sales_agent` | | ✓ |
 
-| Thanh phan      | Cong nghe                       | Muc dich                                 |
-| --------------- | ------------------------------- | ---------------------------------------- |
-| Agent Loop      | OpenAI `gpt-4.1-mini`           | Function calling, tu chon tool, lap vong |
-| Embedding       | OpenAI `text-embedding-3-small` | Chuyen van ban thanh vector 1536-dim     |
-| Vector Database | Qdrant (local mode)             | Tim kiem san pham bang ngu nghia         |
-| Relational DB   | PostgreSQL                      | San pham, don hang, yeu cau ho tro       |
-| Backend         | Flask                           | REST API va giao dien web                |
-| Frontend        | HTML/CSS/JS + marked.js         | Giao dien chat 4 tab                     |
-| Config          | python-dotenv (`.env`)          | Quan ly cau hinh tap trung               |
+## Tech stack
 
-## Yeu cau he thong
+| Component | Technology |
+| --- | --- |
+| LLM and tool calling | OpenAI `gpt-4.1-mini` (Chat Completions API) |
+| Embeddings | OpenAI `text-embedding-3-small` (1536-d) |
+| Vector database | Qdrant (local mode) |
+| Relational database | PostgreSQL, SQLAlchemy |
+| Backend | Flask |
+| Frontend | HTML, CSS, JavaScript, marked.js |
+| Validation | Pydantic |
 
-- **Python** >= 3.10
-- **PostgreSQL** >= 14
-- **OpenAI API Key** (ho tro model `gpt-4.1-mini` va `text-embedding-3-small`)
+## Getting started
 
-## Cai dat
-
-### 1. Clone repository
+Requirements: Python 3.10+, PostgreSQL 14+, and an OpenAI API key.
 
 ```bash
-git clone <repo-url>
-cd AI_Agent
+git clone https://github.com/duyle215/shopping-assistant-agent.git
+cd shopping-assistant-agent
+python -m venv .venv
+.venv\Scripts\activate            # Windows
+# source .venv/bin/activate       # Linux / macOS
+pip install -r requirements.txt
 ```
 
-### 2. Cai dat PostgreSQL
-
-- Tai va cai dat PostgreSQL: https://www.postgresql.org/download/
-- Tao database:
+Create the database and the config file:
 
 ```sql
 CREATE DATABASE shopping_assistant;
 ```
 
-### 3. Tao moi truong ao Python (venv)
+```bash
+cp .env.example .env              # then set POSTGRES_PASSWORD and OPENAI_API_KEY
+```
+
+Check connections, load sample products (creates the tables, inserts 5 products, and builds the Qdrant index), and start the app:
 
 ```bash
-python -m venv .venv
-```
-
-Kich hoat venv:
-
-- **Windows (PowerShell):**
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-- **Windows (CMD):**
-
-```cmd
-.venv\Scripts\activate.bat
-```
-
-- **Linux / macOS:**
-
-```bash
-source .venv/bin/activate
-```
-
-### 4. Cai dat thu vien Python
-
-```bash
-pip install -r requirements.txt
-```
-
-### 5. Cau hinh bien moi truong
-
-Copy file mau va dien thong tin:
-
-```bash
-cp .env.example .env
-```
-
-Mo file `.env` va cap nhat:
-
-```dotenv
-# Bat buoc thay doi
-POSTGRES_PASSWORD=mat_khau_postgres_cua_ban
-OPENAI_API_KEY=sk-proj-xxxxxxxxxxxx
-
-# Cac gia tri khac giu nguyen hoac tuy chinh theo nhu cau
-```
-
-Xem file `.env.example` de biet day du cac bien can thiet.
-
-### 6. Kiem tra ket noi
-
-```bash
-python scripts/check_health.py
-```
-
-Ket qua mong doi:
-
-```
-Postgres: OK
-Qdrant:   OK
-```
-
-### 7. Nap du lieu san pham
-
-```bash
+python scripts/check_health.py    # expects: Postgres OK, Qdrant OK
 python scripts/ingest_data.py
+python run.py                     # http://localhost:5000
 ```
 
-Lenh nay se:
+If you change `EMBED_MODEL` or `EMBED_DIM`, delete `qdrant_data/` and run `scripts/ingest_data.py` again.
 
-- Tao bang `products`, `orders`, `support_requests` trong PostgreSQL
-- Nap 5 san pham mau (co stock)
-- Tao embedding vector va luu vao Qdrant (thu muc `qdrant_data/`)
+## API
 
-## Chay ung dung
-
-```bash
-python run.py
-```
-
-Truy cap: **http://localhost:5000**
-
-Giao dien gom 4 tab:
-
-- **Chat AI** -- Hoi dap voi chatbot tu van dien thoai
-- **San pham** -- Xem danh sach san pham trong kho
-- **Quan ly** -- Xem don hang, yeu cau ho tro (cho nhan vien)
-- **He thong** -- Kiem tra trang thai PostgreSQL, Qdrant
-
-## Cau truc thu muc
-
-```
-AI_Agent/
-├── .env                  # Bien moi truong (KHONG push len git)
-├── .env.example          # Mau file .env
-├── .gitignore
-├── requirements.txt
-├── README.md
-├── run.py                # Entry point: python run.py
-│
-├── app/                  # Package chinh
-│   ├── __init__.py       # Flask factory create_app()
-│   ├── config.py         # Cau hinh tap trung (doc .env)
-│   ├── routes.py         # Flask routes (API endpoints)
-│   ├── sessions.py       # Session store (lich su hoi thoai)
-│   ├── guardrails.py     # Input/Output validation
-│   │
-│   ├── agent/            # Agent package
-│   │   ├── __init__.py   # Export ShoppingAgent
-│   │   ├── core.py       # Agent Loop (LLM + tool calling)
-│   │   ├── tools.py      # Tool definitions + dispatch
-│   │   ├── prompts.py    # System prompts + agent configs
-│   │   └── schemas.py    # Pydantic models
-│   │
-│   └── services/         # Business logic
-│       ├── __init__.py
-│       ├── search.py     # Qdrant semantic search
-│       ├── product.py    # Product details (Postgres)
-│       ├── inventory.py  # Ton kho + dat hang (MCP)
-│       └── support.py    # Human-in-the-Loop
-│
-├── scripts/              # Utility scripts
-│   ├── check_health.py   # Kiem tra ket noi
-│   └── ingest_data.py    # Nap du lieu san pham
-│
-├── templates/
-│   └── index.html        # SPA frontend (4 tab)
-│
-├── qdrant_data/          # Du lieu vector Qdrant (auto-generated)
-└── .venv/                # Moi truong ao Python
-```
-
-## API Endpoints
-
-| Method | Endpoint                | Mo ta                        |
-| ------ | ----------------------- | ---------------------------- |
-| GET    | `/`                     | Trang chu (giao dien chat)   |
-| POST   | `/api/chat`             | Gui tin nhan cho chatbot     |
-| GET    | `/api/products`         | Lay danh sach san pham       |
-| GET    | `/api/stock`            | Xem ton kho toan bo          |
-| GET    | `/api/orders`           | Xem danh sach don hang       |
-| GET    | `/api/support-requests` | Xem yeu cau ho tro           |
-| POST   | `/api/session/clear`    | Xoa session hoi thoai        |
-| GET    | `/api/health`           | Kiem tra trang thai he thong |
-
-### Vi du goi API chat
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET | `/` | Chat UI |
+| POST | `/api/chat` | Send a message: `{"message": "...", "session_id": "..."}` |
+| GET | `/api/products` | List products |
+| GET | `/api/stock` | Stock levels |
+| GET | `/api/orders` | Orders |
+| GET | `/api/support-requests` | Human support requests |
+| POST | `/api/session/clear` | Clear a conversation |
+| GET | `/api/health` | PostgreSQL and Qdrant status |
 
 ```bash
 curl -X POST http://localhost:5000/api/chat \
@@ -224,9 +112,34 @@ curl -X POST http://localhost:5000/api/chat \
   -d '{"message": "Co thong tin gi ve OPPO khong?"}'
 ```
 
-## Luu y
+## Project structure
 
-- File `.env` chua API key va mat khau -- **KHONG BAO GIO** push len GitHub.
-- Thu muc `qdrant_data/` se duoc tao tu dong khi chay `scripts/ingest_data.py`.
-- Neu doi `EMBED_MODEL` hoac `EMBED_DIM`, can xoa `qdrant_data/` va chay lai `scripts/ingest_data.py`.
-- Entry point duy nhat: `python run.py`. Cac script tien ich chay tu `scripts/`.
+```
+.
+├── run.py                  # Entry point
+├── app/
+│   ├── __init__.py         # Flask app factory
+│   ├── config.py           # Settings loaded from .env
+│   ├── routes.py           # REST endpoints and UI
+│   ├── sessions.py         # In-memory session store (20 turns, 1 h TTL)
+│   ├── guardrails.py       # Input and output checks
+│   ├── agent/
+│   │   ├── core.py         # Agent loop and handoffs
+│   │   ├── tools.py        # Tool schemas and dispatch
+│   │   ├── prompts.py      # System prompts and per-agent tool sets
+│   │   └── schemas.py      # Pydantic response models
+│   └── services/
+│       ├── search.py       # Qdrant semantic search
+│       ├── product.py      # Product details
+│       ├── inventory.py    # Stock and orders
+│       └── support.py      # Human support requests
+├── scripts/
+│   ├── check_health.py
+│   └── ingest_data.py
+└── templates/index.html    # Single-page UI
+```
+
+## Notes
+
+- `.env` holds API keys and passwords and is git-ignored. Never commit it.
+- Sessions are kept in memory, so they reset when the server restarts.
