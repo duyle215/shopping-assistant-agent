@@ -15,6 +15,10 @@ Vector nam o collection Qdrant rieng (product_knowledge_eval). Traces o Postgres
     python scripts/eval_agent.py --category order      # mot nhom
     python scripts/eval_agent.py --only order-confirmed compare-a55-a35
     python scripts/eval_agent.py --judge               # them LLM giam khao (ton them quota)
+    python scripts/eval_agent.py --judge --resume      # chay tiep lan truoc bi ngat (cung commit, model)
+
+Moi kich ban xong duoc ghi ngay vao .cache/agent_eval_progress.jsonl. Het quota thi dung lai,
+khong ghi kich ban dang do; --resume bo qua cac kich ban da xong cua cung commit + model + giam khao.
 """
 
 from __future__ import annotations
@@ -120,6 +124,33 @@ def translate_ids(scenarios: list[dict], catalog: dict[int, dict]) -> None:
                 for key in ("product_id", "product_ids"):
                     if key in rules:
                         rules[key] = conv(rules[key])
+
+
+# ------------------------------------------------------------------
+# CHECKPOINT
+# ------------------------------------------------------------------
+PROGRESS = os.path.join(ROOT, ".cache/agent_eval_progress.jsonl")
+
+
+class OutOfQuota(Exception):
+    """Model het quota (agent tra cau 'he thong ban'): dung, khong tinh kich ban dang do."""
+
+
+def load_progress(key: dict) -> dict[str, dict]:
+    done: dict[str, dict] = {}
+    if os.path.exists(PROGRESS):
+        with open(PROGRESS, encoding="utf-8") as f:
+            for line in f:
+                rec = json.loads(line)
+                if rec["key"] == key:
+                    done[rec["result"]["id"]] = rec["result"]
+    return done
+
+
+def save_progress(key: dict, result: dict) -> None:
+    os.makedirs(os.path.dirname(PROGRESS), exist_ok=True)
+    with open(PROGRESS, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"key": key, "result": result}, ensure_ascii=False) + "\n")
 
 
 # ------------------------------------------------------------------
@@ -334,6 +365,9 @@ def main() -> None:
         help="Ghi de ket qua cac kich ban vua chay vao lan chay day du truoc (.cache) roi viet lai bao cao",
     )
     parser.add_argument("--sleep", type=float, default=4.0, help="Nghi giua cac kich ban (giay)")
+    parser.add_argument(
+        "--resume", action="store_true", help="Bo qua kich ban da xong o lan chay truoc (cung commit, model, giam khao)"
+    )
     args = parser.parse_args()
 
     setup_database(args.db, args.odoo_db)
@@ -362,12 +396,22 @@ def main() -> None:
     judge_model = args.judge_model or LLM_MODEL
 
     commit = current_commit()
-    results = []
+    key = {"commit": commit, "model": LLM_MODEL, "judge": judge_model if args.judge else None}
+    done = load_progress(key) if args.resume else {}
+    if not args.resume and os.path.exists(PROGRESS):
+        os.remove(PROGRESS)
+    results = [done[s["id"]] for s in scenarios if s["id"] in done]
     consecutive_errors = 0
     started = time.time()
-    print(f"Chay {len(scenarios)} kich ban voi {LLM_MODEL} (Odoo: {args.odoo_db}, traces: {args.db})\n")
+    todo = [s for s in scenarios if s["id"] not in done]
+    print(
+        f"Chay {len(todo)} kich ban voi {LLM_MODEL} (Odoo: {args.odoo_db}, traces: {args.db})"
+        + (f"; {len(done)} kich ban da xong o lan truoc" if done else "")
+        + "\n"
+    )
 
-    for sc in scenarios:
+    stopped = False
+    for sc in todo:
         for attempt in (1, 2):
             reset_state(catalog)
             session = f"eval-{sc['id']}-{uuid.uuid4().hex[:6]}"
@@ -381,6 +425,8 @@ def main() -> None:
                     had_pending = resp.pending_confirmation is not None
                     if had_pending and turn.get("confirm"):
                         resp = agent.confirm(session, turn["confirm"] == "approve")
+                    if resp.intent == "error" and "han muc" in (resp.warning or ""):  # QuotaExhausted
+                        raise OutOfQuota(resp.warning)
                     answers.append(resp.answer_markdown or "")
                     calls, outputs = turn_tool_calls(agent, session)
                     all_outputs += outputs
@@ -395,6 +441,10 @@ def main() -> None:
                     convo += f"\nCustomer: {sc['turns'][-1]['user']}"
                     verdict = judge(convo, all_outputs, resp.answer_markdown, judge_model)
                 consecutive_errors = 0
+            except OutOfQuota as exc:
+                print(f"  ...  {sc['id']}: het quota ({str(exc)[:120]}). Dung; chay lai voi --resume.")
+                stopped = True
+                break
             except Exception as exc:
                 transient = any(k in type(exc).__name__ for k in ("RateLimit", "InternalServer", "Quota"))
                 if attempt == 1 and transient:
@@ -403,6 +453,8 @@ def main() -> None:
                     continue
                 consecutive_errors += 1
                 fails.append(f"error: {type(exc).__name__}: {str(exc)[:200]}")
+            break
+        if stopped:
             break
 
         with get_engine().connect() as conn:
@@ -433,6 +485,9 @@ def main() -> None:
                 "latency_ms": int(usage.turn_ms),
             }
         )
+        # Loi tam thoi cua API (khong phai loi cua agent): khong luu, --resume se chay lai
+        if not any(f.startswith("error:") for f in fails):
+            save_progress(key, results[-1])
         mark = "PASS" if passed else "FAIL"
         extra = "" if verdict is None else f"  judge: grounded={verdict['grounded']} helpful={verdict['helpful']}"
         print(f"  {mark}  {sc['id']}{extra}")
@@ -443,6 +498,16 @@ def main() -> None:
             print("\nDung som: 3 kich ban lien tiep loi (co the het quota API).")
             break
         time.sleep(args.sleep)
+
+    if len(results) < len(scenarios):
+        print(
+            f"\nChua du: {len(results)}/{len(scenarios)} kich ban. Khong viet bao cao; "
+            "chay lai voi --resume de tiep tuc."
+        )
+        sys.exit(2)
+    order = {s["id"]: i for i, s in enumerate(scenarios)}
+    results.sort(key=lambda r: order[r["id"]])
+    args.resumed = len(done)
 
     rerun: list[str] = []
     cache = os.path.join(ROOT, ".cache/agent_eval_results.json")
@@ -494,7 +559,12 @@ def write_report(results: list[dict], args, model: str, seconds: float, rerun: l
         "",
         f"Code: `{commit}` · Backend: Odoo 19 · Model: `{model}` · Scenarios: {n} · Turns: {turns} · "
         f"Run: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
-        + ("" if rerun else f" ({seconds / 60:.0f} min)"),
+        + ("" if rerun else f" ({seconds / 60:.0f} min)")
+        + (
+            f" · resumed: {args.resumed} scenarios came from an interrupted session on the same commit"
+            if getattr(args, "resumed", 0)
+            else ""
+        ),
         "",
         f"**Task success: {passed}/{n} = {passed / n:.0%}** (a scenario passes only if every check in every turn passes)",
         *(
