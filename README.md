@@ -17,7 +17,7 @@ Works with any OpenAI-compatible provider. Tested with Google Gemini's free tier
 | Spec extraction, field accuracy | **99.5%** (418/420) | [docs/extraction_eval.md](docs/extraction_eval.md) |
 | Search Hit@1, name / feature queries | 100% / 90% | [docs/search_eval.md](docs/search_eval.md) |
 | Prompt-injection attacks blocked | regex 17/20, LLM 19/20, both **20/20**; 0/15 benign messages blocked | [docs/guardrail_eval.md](docs/guardrail_eval.md) |
-| Overselling under concurrent orders | 1 of 8 buyers gets the last unit (5 of 8 without the row lock) | `tests/test_place_order.py` |
+| Overselling under concurrent orders, in Odoo | 8 buyers, 1 unit: 1 order confirmed in 5 of 5 rounds; **8 of 8** confirmed in every round with the product-row write removed | `tests/test_place_order.py` |
 
 Measured with `gemini-3.5-flash-lite` on a 30-phone catalog. The scenarios are written for this catalog and the judge is the same model, so treat the numbers as a regression baseline, not a benchmark. The Vietnamese regex patterns were added after a first run on the injection set (8/20 before), so the regex row is optimistic; the LLM row was not tuned on it.
 
@@ -25,7 +25,7 @@ Measured with `gemini-3.5-flash-lite` on a 30-phone catalog. The scenarios are w
 
 - **Odoo is the backend.** Phones are `product.template` records with typed spec fields from a small addon; stock is Odoo Inventory (`free_qty`: on hand minus what confirmed orders reserved); an order is a `res.partner` plus a `sale.order`, confirmed when stock is free and left as a quotation for staff when it is not; a request for staff is a `crm.lead` (Helpdesk is Enterprise-only). Staff work in Odoo as usual.
 - **Least-privilege API user.** The chatbot calls Odoo's JSON-2 API with an API key of a user that can sell, reserve stock and create leads, but cannot edit products or stock levels. A second user, used only by the catalog sync and the evaluation reset, manages products and stock.
-- **No overselling, enforced inside Odoo.** `chat_place_order` (in the addon) checks stock, creates and confirms the order in one database transaction, and writes the product row first. Odoo runs transactions in `REPEATABLE READ`, so a concurrent order for the same phone fails with a serialisation error and is retried on fresh data. 8 buyers racing for the last unit: exactly 1 confirmed order, every time.
+- **No overselling, enforced inside Odoo.** `chat_place_order` (in the addon) checks stock, creates and confirms the order in one database transaction, and writes the product row first. Odoo runs transactions in `REPEATABLE READ`, so a concurrent order for the same phone fails with a serialisation error and is retried on fresh data. 8 buyers racing for the last unit: exactly 1 confirmed order in every round; with the row write removed, all 8 orders were confirmed for 1 unit.
 - **Chat on the Odoo website.** The addon adds a floating chat button to every website page; it opens the app's `/embed` page in an iframe, in the visitor's website language. The app URL is a system parameter.
 - **LangGraph agent graph.** Handoffs, tool calls, answer checks and order confirmation are nodes and edges of a `StateGraph`. State is checkpointed in PostgreSQL, so a restart does not lose conversations.
 - **Human approval before orders.** `place_order` pauses the graph with `interrupt()`. The customer sees product, quantity, total and recipient, then clicks Confirm or Cancel. An abandoned confirmation never becomes an order. Name and phone are required before the card is shown.
