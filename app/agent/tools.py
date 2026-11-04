@@ -38,6 +38,7 @@ SEARCH_FILTERS = (
     "ram_min",
     "battery_min",
     "storage_min",
+    "refresh_rate_min",
 )
 
 
@@ -161,7 +162,8 @@ SEARCH_TOOL_DEF = {
             "Tim kiem dien thoai trong kho hang. LUON GOI tool nay khi khach hoi ve "
             "san pham, thuong hieu, tinh nang, gia ca hoac goi y. Bien nhu cau cua "
             "khach thanh bo loc: 'duoi 10 trieu' -> price_max=10000000; 'pin trau' -> "
-            "battery_min=5000; 'RAM tu 12GB' -> ram_min=12; 'Samsung' -> brand. "
+            "battery_min=5000; 'RAM tu 12GB' -> ram_min=12; 'Samsung' -> brand; "
+            "'man hinh muot / tan so quet cao' -> refresh_rate_min. "
             "Phan nhu cau khong loc duoc (chup dem, choi game, mong nhe...) dua vao query."
         ),
         "parameters": {
@@ -181,6 +183,10 @@ SEARCH_TOOL_DEF = {
                 "ram_min": {"type": "integer", "description": "RAM toi thieu (GB)"},
                 "battery_min": {"type": "integer", "description": "Pin toi thieu (mAh)"},
                 "storage_min": {"type": "integer", "description": "Bo nho trong toi thieu (GB)"},
+                "refresh_rate_min": {
+                    "type": "integer",
+                    "description": "Tan so quet man hinh toi thieu (Hz), vd choi game: 144",
+                },
                 "top_k": {"type": "integer", "description": "So ket qua (mac dinh 5)"},
             },
             "required": ["query"],

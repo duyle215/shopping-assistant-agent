@@ -55,3 +55,12 @@ def test_hybrid_falls_back_to_keyword_when_embedding_fails(db, monkeypatch):
 
     results = search.search_products("iphone 15")
     assert [r.product_id for r in results] == [2]
+
+
+def test_keyword_refresh_rate_filter(db):
+    _add(db, 1, "iPhone 15")
+    with db.begin() as conn:
+        conn.execute(text("UPDATE products SET refresh_rate_hz = 165 WHERE id = 1"))
+    _add(db, 2, "iPhone 15 Plus")
+
+    assert keyword_ids("iphone 15", 5, refresh_rate_min=144) == [1]

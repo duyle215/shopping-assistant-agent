@@ -42,6 +42,7 @@ def _clean_filters(
     ram_min: Optional[int] = None,
     battery_min: Optional[int] = None,
     storage_min: Optional[int] = None,
+    refresh_rate_min: Optional[int] = None,
 ) -> dict:
     return {
         "brand": normalize_brand(brand) if brand else None,
@@ -51,6 +52,7 @@ def _clean_filters(
         "ram_min": ram_min,
         "battery_min": battery_min,
         "storage_min": storage_min,
+        "refresh_rate_min": refresh_rate_min,
     }
 
 
@@ -72,6 +74,8 @@ def build_filter(**filters):
         must.append(FieldCondition(key="battery_mah", range=Range(gte=f["battery_min"])))
     if f["storage_min"] is not None:
         must.append(FieldCondition(key="max_storage_gb", range=Range(gte=f["storage_min"])))
+    if f["refresh_rate_min"] is not None:
+        must.append(FieldCondition(key="refresh_rate_hz", range=Range(gte=f["refresh_rate_min"])))
     return Filter(must=must) if must else None
 
 
@@ -98,6 +102,9 @@ def _sql_filter(f: dict) -> tuple[str, dict]:
     if f["storage_min"] is not None:
         clauses.append(":storage_min <= ANY(storage_gb)")
         params["storage_min"] = f["storage_min"]
+    if f["refresh_rate_min"] is not None:
+        clauses.append("refresh_rate_hz >= :refresh_rate_min")
+        params["refresh_rate_min"] = f["refresh_rate_min"]
     return (" AND ".join(clauses) or "TRUE"), params
 
 
@@ -154,7 +161,7 @@ def _load(ids_scores: list[tuple[int, float]]) -> list[SearchResult]:
     with get_engine().connect() as conn:
         rows = conn.execute(
             text(
-                "SELECT id, name, brand, price, ram_gb, battery_mah, main_camera_mp, "
+                "SELECT id, name, brand, price, ram_gb, battery_mah, main_camera_mp, refresh_rate_hz, "
                 "(SELECT max(s) FROM unnest(storage_gb) s) AS max_storage_gb "
                 "FROM products WHERE id = ANY(:ids)"
             ),
@@ -171,6 +178,7 @@ def _load(ids_scores: list[tuple[int, float]]) -> list[SearchResult]:
             battery_mah=r.battery_mah,
             max_storage_gb=r.max_storage_gb,
             main_camera_mp=r.main_camera_mp,
+            refresh_rate_hz=r.refresh_rate_hz,
             score=round(score, 4),
         )
         for pid, score in ids_scores

@@ -123,6 +123,7 @@ ACTION_CLAIMS: dict[str, list[str]] = {
         r"nh[âa]n vi[êe]n (s[ẽe] |đ[ãa] )?(li[êe]n h[ệe]|g[ọo]i l[ạa]i|g[ọo]i cho)",
         r"(k[ếe]t n[ốo]i|chuy[ểe]n)[^.\n]{0,40}nh[âa]n vi[êe]n",
         r"(đ[ãa]|da) (g[ửu]i|t[ạa]o|ghi nh[ậa]n) y[êe]u c[ầa]u h[ỗo] tr[ợo]",
+        r"(chuy[ểe]n|g[ửu]i)\s+(y[êe]u c[ầa]u|th[ôo]ng tin)[^.\n]{0,80}(b[ộo] ph[ậa]n|nh[âa]n vi[êe]n)",
     ],
     "place_order": [
         r"(đ[ãa]|da) (đ[ặa]t|ghi nh[ậa]n)[^.\n]{0,40}(đ[ơo]n|th[àa]nh c[ôo]ng)",

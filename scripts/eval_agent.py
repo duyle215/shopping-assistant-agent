@@ -296,6 +296,7 @@ def main() -> None:
     agent = ShoppingAgent(checkpointer=MemorySaver())
     judge_model = args.judge_model or LLM_MODEL
 
+    commit = current_commit()
     results = []
     consecutive_errors = 0
     started = time.time()
@@ -350,6 +351,7 @@ def main() -> None:
                 "fails": fails,
                 "judge": verdict,
                 "answers": answers,
+                "commit": commit,
                 "turns": len(sc["turns"]),
                 "llm_calls": usage.calls,
                 "prompt_tokens": int(usage.pt),
@@ -382,6 +384,21 @@ def main() -> None:
     write_report(results, args, LLM_MODEL, time.time() - started, rerun)
 
 
+def current_commit() -> str:
+    import subprocess
+
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain", "--", "app"], cwd=ROOT, capture_output=True, text=True
+        ).stdout.strip()
+        return commit + ("+dirty" if dirty else "")
+    except Exception:
+        return "unknown"
+
+
 def write_report(results: list[dict], args, model: str, seconds: float, rerun: list[str] | None = None) -> None:
     n = len(results)
     if not n:
@@ -393,10 +410,15 @@ def write_report(results: list[dict], args, model: str, seconds: float, rerun: l
     turns = sum(r["turns"] for r in results) or 1
     judged = [r["judge"] for r in results if r["judge"]]
 
+    commits: dict[str, int] = {}
+    for r in results:
+        commits[r.get("commit", "unknown")] = commits.get(r.get("commit", "unknown"), 0) + 1
+    commit = ", ".join(f"{c} ({k} scenarios)" if len(commits) > 1 else c for c, k in commits.items())
+
     lines = [
         "# Agent evaluation",
         "",
-        f"Model: `{model}` · Scenarios: {n} · Turns: {turns} · "
+        f"Code: `{commit}` · Model: `{model}` · Scenarios: {n} · Turns: {turns} · "
         f"Run: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
         + ("" if rerun else f" ({seconds / 60:.0f} min)"),
         "",

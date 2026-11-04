@@ -41,6 +41,7 @@ def search_products(
     ram_min: Optional[int] = None,
     battery_min: Optional[int] = None,
     storage_min: Optional[int] = None,
+    refresh_rate_min: Optional[int] = None,
     top_k: int = 5,
 ) -> list[dict]:
     """Find phones by need or name (hybrid search) with optional filters. Prices in VND."""
@@ -53,6 +54,7 @@ def search_products(
         ram_min=ram_min,
         battery_min=battery_min,
         storage_min=storage_min,
+        refresh_rate_min=refresh_rate_min,
     )
     results = _search(query, top_k=top_k, **{k: v for k, v in filters.items() if v is not None})
     return [r.model_dump(exclude={"score"}) for r in results]

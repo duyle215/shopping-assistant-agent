@@ -58,3 +58,8 @@ def test_llm_guard_is_off_without_model():
     from app.guardrails import check_input_llm
 
     assert check_input_llm("anything", None).passed
+
+
+def test_forwarding_to_staff_without_tool_is_flagged():
+    answer = "Tôi xin phép chuyển yêu cầu này đến bộ phận chăm sóc khách hàng để nhân viên liên hệ."
+    assert unbacked_action_claims(answer, []) == ["request_human_support"]

@@ -47,6 +47,7 @@ class SearchResult(BaseModel):
     battery_mah: int
     max_storage_gb: int
     main_camera_mp: int
+    refresh_rate_hz: int
     score: float
 
 
