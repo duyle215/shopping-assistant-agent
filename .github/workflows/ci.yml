@@ -1,8 +1,10 @@
 name: CI
 
+# Automatic runs are paused while GitHub Actions is unavailable on this account.
+# To run on every push again, add these two lines under "on:":
+#   push:
+#   pull_request:
 on:
-  push:
-  pull_request:
   workflow_dispatch:
     inputs:
       run_agent_eval:
