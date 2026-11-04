@@ -264,9 +264,11 @@ def check_db(expect: dict, snap: dict) -> list[str]:
 # LLM GIAM KHAO (tuy chon)
 # ------------------------------------------------------------------
 JUDGE_PROMPT = (
-    "You grade a Vietnamese phone-shop chatbot. You get the customer's message, the data the "
-    "bot's tools returned, and the bot's answer. Judge ONLY against the tool data.\n"
-    "- grounded: false if the answer states any product fact (price, spec, feature, stock, "
+    "You grade a Vietnamese phone-shop chatbot. You get the conversation so far, the data the "
+    "bot's tools returned in any turn of it, and the bot's LAST answer, which is the one you grade. "
+    "Judge facts ONLY against the tool data; earlier messages are context (what the customer asked "
+    "or said, e.g. their budget), and the bot's earlier answers are not evidence.\n"
+    "- grounded: false if the last answer states any product fact (price, spec, feature, stock, "
     "policy) that is not supported by the tool data. Greetings and questions do not count.\n"
     "- ungrounded_claims: list those facts (empty if grounded).\n"
     "- helpful: 1-5, does it answer what the customer asked.\n"
@@ -274,7 +276,7 @@ JUDGE_PROMPT = (
 )
 
 
-def judge(question: str, tool_outputs: list[str], answer: str, model: str) -> dict:
+def judge(conversation: str, tool_outputs: list[str], answer: str, model: str) -> dict:
     from pydantic import BaseModel
 
     from app.agent.llm import client
@@ -285,26 +287,26 @@ def judge(question: str, tool_outputs: list[str], answer: str, model: str) -> di
         helpful: int
         polite: bool
 
-    data = "\n\n".join(tool_outputs)[:8000] or "(no tool was called)"
+    data = "\n\n".join(tool_outputs)[:16000] or "(no tool was called)"
     from openai import RateLimitError
 
     from app.agent.llm import _retry_after
 
     for attempt in range(1, 5):
         try:
-            return _judge_once(client, Verdict, question, data, answer, model)
+            return _judge_once(client, Verdict, conversation, data, answer, model)
         except RateLimitError as exc:
             if attempt == 4:
                 raise
             time.sleep(min(max(_retry_after(exc) or 0, 15.0 * attempt), 90.0))
 
 
-def _judge_once(client, Verdict, question, data, answer, model) -> dict:
+def _judge_once(client, Verdict, conversation, data, answer, model) -> dict:
     resp = client().chat.completions.parse(
         model=model,
         messages=[
             {"role": "system", "content": JUDGE_PROMPT},
-            {"role": "user", "content": f"CUSTOMER:\n{question}\n\nTOOL DATA:\n{data}\n\nANSWER:\n{answer}"},
+            {"role": "user", "content": f"CONVERSATION:\n{conversation}\n\nTOOL DATA (all turns):\n{data}\n\nLAST ANSWER:\n{answer}"},
         ],
         response_format=Verdict,
         temperature=0,
@@ -371,6 +373,7 @@ def main() -> None:
             session = f"eval-{sc['id']}-{uuid.uuid4().hex[:6]}"
             fails: list[str] = []
             answers: list[str] = []
+            all_outputs: list[str] = []  # du lieu tool cua moi luot, cho giam khao
             verdict = None
             try:
                 for i, turn in enumerate(sc["turns"], start=1):
@@ -380,10 +383,17 @@ def main() -> None:
                         resp = agent.confirm(session, turn["confirm"] == "approve")
                     answers.append(resp.answer_markdown or "")
                     calls, outputs = turn_tool_calls(agent, session)
+                    all_outputs += outputs
                     fails += [f"turn {i}: {f}" for f in check_turn(turn, resp, calls, had_pending, allowed)]
                 fails += [f"db: {f}" for f in check_db(sc.get("db") or {}, db_snapshot(session, catalog))]
                 if args.judge and resp.intent != "blocked" and not resp.pending_confirmation:
-                    verdict = judge(sc["turns"][-1]["user"], outputs, resp.answer_markdown, judge_model)
+                    # Giam khao xem ca hoi thoai: khach co the noi ngan sach o luot truoc,
+                    # bot co the tra loi bang du lieu tool cua luot truoc ("pin cua no?")
+                    convo = "\n".join(
+                        f"Customer: {t['user']}\nBot: {a}" for t, a in zip(sc["turns"][:-1], answers[:-1])
+                    )
+                    convo += f"\nCustomer: {sc['turns'][-1]['user']}"
+                    verdict = judge(convo, all_outputs, resp.answer_markdown, judge_model)
                 consecutive_errors = 0
             except Exception as exc:
                 transient = any(k in type(exc).__name__ for k in ("RateLimit", "InternalServer", "Quota"))
