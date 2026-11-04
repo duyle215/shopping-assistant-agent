@@ -175,7 +175,10 @@ SEARCH_TOOL_DEF = {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Nhu cau bang loi (ten may, tinh nang, muc dich su dung)",
+                    "description": (
+                        "Nhu cau bang loi cua khach (ten may, tinh nang, muc dich su dung), "
+                        "giu nguyen dau tieng Viet, vd 'điện thoại gập', khong viet 'dien thoai gap'"
+                    ),
                 },
                 "brand": {
                     "type": "string",
