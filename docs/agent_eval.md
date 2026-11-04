@@ -1,14 +1,12 @@
 # Agent evaluation
 
-Code: `a9c6f23 (12 scenarios), 662be35 (19 scenarios), da3a4a1 (9 scenarios), 0cb1aa6 (6 scenarios)` · Model: `gemini-3.5-flash-lite` · Scenarios: 46 · Turns: 54 · Run: 2026-11-04 08:58 UTC
+Code: `112ac07` · Backend: Odoo 19 · Model: `gemini-3.5-flash-lite` · Scenarios: 46 · Turns: 54 · Run: 2026-11-04 10:27 UTC (13 min)
 
-**Task success: 46/46 = 100%** (a scenario passes only if every check in every turn passes)
-
-Merged report: 6 scenarios were re-run after fixes and replace their results from the previous full run (en-search-filter, en-cheapest, en-compare, en-order-confirmed, en-warranty, en-injection).
+**Task success: 45/46 = 98%** (a scenario passes only if every check in every turn passes)
 
 | Category | Passed | Rate |
 | --- | ---: | ---: |
-| search | 11/11 | 100% |
+| search | 10/11 | 91% |
 | compare | 8/8 | 100% |
 | order | 8/8 | 100% |
 | support | 5/5 | 100% |
@@ -19,16 +17,18 @@ Merged report: 6 scenarios were re-run after fixes and replace their results fro
 | Per turn (average) | Value |
 | --- | ---: |
 | LLM calls | 2.6 |
-| Prompt tokens | 6,142 |
-| Completion tokens | 214 |
-| Latency | 14.9 s |
+| Prompt tokens | 6,752 |
+| Completion tokens | 217 |
+| Latency | 4.8 s |
 
-LLM judge on the last turn of 43 scenarios: grounded 42/43 = 98%, average helpfulness 4.9/5, polite 43/43.
+LLM judge on the last turn of 43 scenarios: grounded 42/43 = 98%, average helpfulness 5.0/5, polite 43/43.
 
 | Scenario | Claims not supported by tool data |
 | --- | --- |
-| context-budget-carried-over | trong tầm ngân sách khoảng 25 triệu đồng |
+| context-budget-carried-over | trong khoảng ngân sách dưới 25 triệu và phù hợp với nhu cầu chụp ảnh |
 
 ## Failures
 
-None.
+| Scenario | Checks that failed |
+| --- | --- |
+| search-foldable | turn 1: answer has none of ['Fold6', 'Flip6'] |
