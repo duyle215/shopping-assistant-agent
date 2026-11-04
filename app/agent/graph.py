@@ -30,8 +30,8 @@ from app import tracing
 from app.agent import llm
 from app.agent.prompts import HANDOFF_MAP, build_agent_configs
 from app.agent.tools import TOOL_DEFS, TOOL_DISPATCH
-from app.config import MAX_ITERATIONS
-from app.guardrails import check_input, check_output, unbacked_action_claims
+from app.config import GUARD_MODEL, MAX_ITERATIONS
+from app.guardrails import check_input, check_input_llm, check_output, unbacked_action_claims
 from app.services.compare import unsupported_numbers
 
 logger = logging.getLogger("agent")
@@ -131,6 +131,8 @@ def _llm_messages(state: State) -> list[dict]:
 def start(state: State, config) -> dict:
     user_msg = state["turn"][0]["content"]
     result = check_input(user_msg)
+    if result.passed:
+        result = check_input_llm(user_msg, GUARD_MODEL)
     if result.passed:
         return {"agent": state.get("agent") or "sales"}
     logger.warning(f"[Guardrail] Input blocked: {result.reason}")

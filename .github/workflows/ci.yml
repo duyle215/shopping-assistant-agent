@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_agent_eval:
+        description: "Also run the conversation evaluation (uses the LLM API secrets)"
+        type: boolean
+        default: false
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  agent-eval:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_agent_eval
+    needs: tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: shopping_assistant
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/' }}
+      OPENAI_API_KEY: ${{ secrets.LLM_API_KEY }}
+      LLM_MODEL: ${{ vars.LLM_MODEL || 'gemini-3.5-flash-lite' }}
+      EMBED_MODEL: ${{ vars.EMBED_MODEL || 'gemini-embedding-001' }}
+      EMBED_DIM: ${{ vars.EMBED_DIM || '3072' }}
+      QDRANT_PATH: ./qdrant_data
+      QDRANT_COLLECTION: product_knowledge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: psql -h localhost -U postgres -c "CREATE DATABASE shopping_assistant"
+        env:
+          PGPASSWORD: postgres
+      - run: python scripts/ingest_data.py
+      - run: python scripts/eval_agent.py --judge
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-eval
+          path: docs/agent_eval.md

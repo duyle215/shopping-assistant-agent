@@ -69,6 +69,9 @@ QDRANT_COLLECTION = _require("QDRANT_COLLECTION")
 # ------------------------------------------------------------------
 MAX_ITERATIONS = 10
 
+# Guardrail bang LLM (lop thu hai sau regex). De trong = tat (tiet kiem quota).
+GUARD_MODEL = os.getenv("GUARD_MODEL") or None
+
 # ------------------------------------------------------------------
 # FLASK
 # ------------------------------------------------------------------

@@ -76,12 +76,28 @@ def _assemble(stream, on_token: Optional[Callable[[str], None]]) -> tuple[dict, 
     return message, usage
 
 
+def _retry_after(exc: Exception) -> Optional[float]:
+    """Doc thoi gian cho tu loi 429 (header Retry-After hoac retryDelay cua Gemini)."""
+    import re
+
+    response = getattr(exc, "response", None)
+    header = response.headers.get("retry-after") if response is not None else None
+    if header:
+        try:
+            return float(header)
+        except ValueError:
+            pass
+    text = str(getattr(exc, "body", "")) + str(exc)
+    m = re.search(r"retry(?:Delay)?[\"':\s]+(?:in\s+)?([\d.]+)\s*s", text, re.IGNORECASE)
+    return float(m.group(1)) if m else None
+
+
 def chat(
     messages: list[dict],
     tools: Optional[list[dict]] = None,
     on_token: Optional[Callable[[str], None]] = None,
     model: str = LLM_MODEL,
-    retries: int = 4,
+    retries: int = 5,
 ) -> LLMResult:
     """Goi model (stream). Thu lai khi bi gioi han toc do / loi tam thoi, chi khi chua stream chu nao."""
     delay = 2.0
@@ -123,7 +139,11 @@ def chat(
             )
             if not transient or emitted or attempt == retries:
                 raise
-            logger.warning(f"[LLM] {type(exc).__name__}, thu lai sau {delay:.0f}s")
-            time.sleep(delay)
+            wait = delay
+            if isinstance(exc, RateLimitError):
+                # Gioi han theo phut cua free tier: cho theo goi y cua provider neu co
+                wait = max(_retry_after(exc) or 0, 15.0 * attempt)
+            logger.warning(f"[LLM] {type(exc).__name__}, thu lai sau {wait:.0f}s")
+            time.sleep(wait)
             delay *= 2
     raise RuntimeError("unreachable")
