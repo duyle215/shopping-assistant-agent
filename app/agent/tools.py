@@ -2,8 +2,8 @@
 Tool definitions va dispatch cho Agent (OpenAI function-calling format).
 
 Module nay chua:
-  - 8 tool definitions (search, detail, 2 handoff, inventory, order, HITL, save_info)
-  - 6 _exec_* dispatcher functions
+  - 9 tool definitions (search, detail, compare, 2 handoff, inventory, order, HITL, save_info)
+  - 7 _exec_* dispatcher functions
   - TOOL_DISPATCH map
   - TOOL_DEFS dict (ten -> definition, dung trong prompts.build_agent_configs)
 """
@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.services.compare import ASPECT_KEYS, compare_products
 from app.services.search import search_products
 from app.services.product import get_product_details
 from app.services.inventory import (
@@ -29,27 +30,50 @@ from app.services.support import (
 # ------------------------------------------------------------------
 # TOOL DISPATCH FUNCTIONS
 # ------------------------------------------------------------------
+SEARCH_FILTERS = (
+    "brand",
+    "os",
+    "price_min",
+    "price_max",
+    "ram_min",
+    "battery_min",
+    "storage_min",
+)
+
+
 def _exec_search(args: dict) -> str:
     """Goi search_products va serialize ket qua."""
-    results = search_products(
-        query=args["query"],
-        brand_filter=args.get("brand_filter"),
-        max_price=args.get("max_price"),
-        top_k=args.get("top_k", 3),
-    )
-    # Retry khong filter neu 0 ket qua
-    if not results and (args.get("brand_filter") or args.get("max_price")):
-        results = search_products(query=args["query"])
+    filters = {k: args[k] for k in SEARCH_FILTERS if args.get(k) not in (None, "")}
+    top_k = int(args.get("top_k") or 5)
+    results = search_products(query=args["query"], top_k=top_k, **filters)
 
-    if not results:
+    if results:
+        return json.dumps([r.model_dump() for r in results], ensure_ascii=False)
+
+    if filters:
+        # Khong may nao thoa dieu kien: noi ro, kem vai goi y gan nhat (danh dau rieng)
+        nearest = search_products(query=args["query"], top_k=3)
         return json.dumps(
-            {"message": "Khong tim thay san pham phu hop trong kho hang."},
+            {
+                "message": "Khong co san pham nao thoa tat ca dieu kien loc.",
+                "filters": filters,
+                "nearest_without_filters": [r.model_dump() for r in nearest],
+            },
             ensure_ascii=False,
         )
     return json.dumps(
-        [r.model_dump() for r in results],
+        {"message": "Khong tim thay san pham phu hop trong kho hang."},
         ensure_ascii=False,
     )
+
+
+def _exec_compare(args: dict) -> str:
+    """Goi compare_products (bang so sanh dung bang code)."""
+    result = compare_products(
+        product_ids=[int(i) for i in args.get("product_ids") or []],
+        aspects=args.get("aspects") or None,
+    )
+    return json.dumps(result, ensure_ascii=False)
 
 
 def _exec_detail(args: dict) -> str:
@@ -118,6 +142,7 @@ def _exec_save_customer_info(args: dict) -> str:
 TOOL_DISPATCH: dict[str, Any] = {
     "search_products": _exec_search,
     "get_product_details": _exec_detail,
+    "compare_products": _exec_compare,
     "check_inventory": _exec_check_inventory,
     "place_order": _exec_place_order,
     "request_human_support": _exec_request_human,
@@ -133,27 +158,60 @@ SEARCH_TOOL_DEF = {
     "function": {
         "name": "search_products",
         "description": (
-            "Tim kiem san pham dien thoai trong kho hang. "
-            "LUON GOI tool nay khi khach hoi ve san pham, thuong hieu, "
-            "tinh nang, gia ca, goi y, hoac bat ky noi dung lien quan san pham."
+            "Tim kiem dien thoai trong kho hang. LUON GOI tool nay khi khach hoi ve "
+            "san pham, thuong hieu, tinh nang, gia ca hoac goi y. Bien nhu cau cua "
+            "khach thanh bo loc: 'duoi 10 trieu' -> price_max=10000000; 'pin trau' -> "
+            "battery_min=5000; 'RAM tu 12GB' -> ram_min=12; 'Samsung' -> brand. "
+            "Phan nhu cau khong loc duoc (chup dem, choi game, mong nhe...) dua vao query."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Noi dung tim kiem (ten, tinh nang, nhu cau)",
+                    "description": "Nhu cau bang loi (ten may, tinh nang, muc dich su dung)",
                 },
-                "brand_filter": {
+                "brand": {
                     "type": "string",
-                    "description": "Loc theo thuong hieu: Apple, Samsung, Xiaomi, OPPO, Google",
+                    "description": "Hang: Apple, Samsung, Xiaomi, OPPO, vivo, Google, realme, Honor, Nothing, ASUS",
                 },
-                "max_price": {
-                    "type": "number",
-                    "description": "Gia toi da (VND)",
-                },
+                "os": {"type": "string", "enum": ["iOS", "Android"]},
+                "price_min": {"type": "number", "description": "Gia toi thieu (VND)"},
+                "price_max": {"type": "number", "description": "Gia toi da (VND)"},
+                "ram_min": {"type": "integer", "description": "RAM toi thieu (GB)"},
+                "battery_min": {"type": "integer", "description": "Pin toi thieu (mAh)"},
+                "storage_min": {"type": "integer", "description": "Bo nho trong toi thieu (GB)"},
+                "top_k": {"type": "integer", "description": "So ket qua (mac dinh 5)"},
             },
             "required": ["query"],
+        },
+    },
+}
+
+COMPARE_TOOL_DEF = {
+    "type": "function",
+    "function": {
+        "name": "compare_products",
+        "description": (
+            "So sanh 2-4 dien thoai theo product_id. Tra ve bang so sanh Markdown dung "
+            "bang code tu CSDL (table_markdown) va tieu chi moi may hon (wins). "
+            "Lay product_id bang search_products truoc."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "product_ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "2 den 4 product_id can so sanh",
+                },
+                "aspects": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ASPECT_KEYS},
+                    "description": "Chi so cac tieu chi nay (bo trong = tat ca). Gia luon co.",
+                },
+            },
+            "required": ["product_ids"],
         },
     },
 }
@@ -340,6 +398,7 @@ SAVE_CUSTOMER_INFO_DEF = {
 TOOL_DEFS: dict[str, dict] = {
     "search_products": SEARCH_TOOL_DEF,
     "get_product_details": DETAIL_TOOL_DEF,
+    "compare_products": COMPARE_TOOL_DEF,
     "transfer_to_compare_agent": HANDOFF_TO_COMPARE_DEF,
     "transfer_to_sales_agent": HANDOFF_TO_SALES_DEF,
     "check_inventory": CHECK_INVENTORY_DEF,

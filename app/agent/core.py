@@ -22,6 +22,7 @@ from app.sessions import SessionStore
 from app.agent.schemas import AgentResponse
 from app.agent.prompts import HANDOFF_MAP, build_agent_configs
 from app.agent.tools import TOOL_DEFS, TOOL_DISPATCH
+from app.services.compare import unsupported_numbers
 
 # ------------------------------------------------------------------
 # LOGGING
@@ -88,6 +89,9 @@ class ShoppingAgent:
         messages.append({"role": "user", "content": user_message})
 
         tools_called: list[str] = []
+        tool_outputs: list[str] = []  # du lieu tool tra ve, de doi chieu so lieu
+        number_check_retried = False
+        warning: str | None = None
 
         # ====== AGENT LOOP ======
         for iteration in range(MAX_ITERATIONS):
@@ -107,6 +111,28 @@ class ShoppingAgent:
             # ---- LLM tra ve van ban (ket thuc loop) ----
             if not msg.tool_calls:
                 answer = msg.content or ""
+
+                # Cau tra loi so sanh: moi con so phai co trong du lieu tool tra ve
+                if "compare_products" in tools_called:
+                    bad = unsupported_numbers(answer, tool_outputs)
+                    if bad and not number_check_retried:
+                        number_check_retried = True
+                        logger.warning(f"[NumberCheck] So khong co trong bang: {bad}, yeu cau viet lai")
+                        messages.append({"role": "assistant", "content": answer})
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "[He thong] Cau tra loi co so lieu khong co trong bang so sanh: "
+                                    f"{', '.join(bad)}. Viet lai, chep nguyen bang table_markdown "
+                                    "va chi dung so co trong bang."
+                                ),
+                            }
+                        )
+                        continue
+                    if bad:
+                        warning = f"So lieu chua kiem chung: {', '.join(bad)}"
+                        logger.warning(f"[NumberCheck] {warning}")
                 logger.info(
                     f"[{current_agent.name}] Hoan thanh sau {iteration + 1} vong"
                 )
@@ -128,7 +154,7 @@ class ShoppingAgent:
                     intent=current_agent.name,
                     answer_markdown=answer,
                     tools_called=tools_called,
-                    warning=None,
+                    warning=warning,
                     session_id=session_id,
                 )
 
@@ -179,6 +205,7 @@ class ShoppingAgent:
                         ensure_ascii=False,
                     )
 
+                tool_outputs.append(result_str)
                 messages.append(
                     {
                         "role": "tool",

@@ -17,7 +17,8 @@ SALES_SYSTEM = (
     "Ban la tu van vien ban hang dien thoai chuyen nghiep tai cua hang.\n\n"
     "NGUYEN TAC BAT BUOC:\n"
     "1. LUON GOI tool search_products TRUOC KHI tra loi bat ky cau hoi nao ve "
-    "san pham. TUYET DOI KHONG tu suy dien hay dung kien thuc rieng.\n"
+    "san pham. TUYET DOI KHONG tu suy dien hay dung kien thuc rieng. "
+    "Dien bo loc (gia, hang, RAM, pin, bo nho) tu nhu cau cua khach.\n"
     "2. Neu tool tra ve san pham -> gioi thieu CU THE: ten, gia, diem noi bat.\n"
     "3. Neu tool tra ve khong co san pham -> noi thang: cua hang chua co.\n"
     "4. KHONG hien thi: score, product_id, metadata, hay thong tin he thong.\n"
@@ -42,18 +43,20 @@ SALES_SYSTEM = (
 COMPARE_SYSTEM = (
     "Ban la chuyen gia so sanh dien thoai.\n\n"
     "NGUYEN TAC BAT BUOC:\n"
-    "1. GOI search_products de tim san pham, roi goi get_product_details "
-    "cho TUNG san pham can so sanh.\n"
-    "2. So sanh TRUNG THUC va CHI TIET: chip, RAM, pin, camera, man hinh, gia.\n"
-    "3. Dung BANG MARKDOWN de so sanh truc quan.\n"
-    "4. Ket luan: san pham nao phu hop voi nhu cau nao, khong thien vi.\n"
+    "1. GOI search_products de lay product_id cua TUNG may khach nhac den, "
+    "roi goi compare_products voi cac product_id do.\n"
+    "2. CHEP NGUYEN VAN bang table_markdown vao cau tra loi. KHONG tu ve bang, "
+    "KHONG sua so trong bang.\n"
+    "3. Sau bang, viet nhan xet ngan: may nao hop nhu cau nao, dua tren 'wins' va nhu cau khach. "
+    "CHI dung con so co trong bang; KHONG tu tinh chenh lech, KHONG them thong so ngoai bang.\n"
+    "4. Neu khong tim thay mot may trong kho -> noi ro cua hang chua co may do.\n"
     "5. KHONG hien thi: score, product_id, metadata.\n"
     "6. Tra loi bang Tieng Viet, dinh dang Markdown.\n"
     "7. Khi da so sanh xong, KHONG goi transfer_to_sales_agent tu dong. "
     "Chi goi khi khach yeu cau chuyen sang mua hoac hoi cau khac.\n\n"
     "HUMAN-IN-THE-LOOP:\n"
     "8. SAU KHI so sanh xong, LUON hoi them: "
-    "'Ban co muon nhan vien tu van them chi tiet hoac ho tro dat hang khong?'\n"
+    "'Bạn có muốn nhân viên tư vấn thêm chi tiết hoặc hỗ trợ đặt hàng không?'\n"
     "9. Neu khach dong y muon nhan vien tu van -> goi request_human_support "
     "va hoi khach de lai ho ten + so dien thoai.\n"
 )
@@ -95,6 +98,7 @@ def build_agent_configs(tool_defs: dict[str, dict]) -> dict[str, AgentConfig]:
             system_prompt=COMPARE_SYSTEM,
             tools=[
                 tool_defs["search_products"],
+                tool_defs["compare_products"],
                 tool_defs["get_product_details"],
                 tool_defs["transfer_to_sales_agent"],
                 tool_defs["request_human_support"],

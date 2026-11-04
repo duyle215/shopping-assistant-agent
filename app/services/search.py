@@ -1,95 +1,85 @@
 """
-Search service - Tim kiem san pham bang Qdrant semantic search.
+Search service - tim san pham theo nghia (Qdrant) ket hop bo loc co cau truc.
+
+LLM bien cau hoi thanh tham so tool, vd "Samsung duoi 10 trieu pin trau" ->
+query="pin trau", brand="Samsung", price_max=10_000_000, battery_min=5000.
+Bo loc chay tren payload Qdrant (gia, hang, RAM, pin, bo nho), sau do moi xep hang theo nghia.
 """
 
 from __future__ import annotations
 
 from typing import Optional
 
-from app.config import (
-    EMBED_MODEL,
-    OPENAI_API_KEY,
-    OPENAI_BASE_URL,
-    QDRANT_COLLECTION,
-)
-from app.db import get_qdrant
 from app.agent.schemas import SearchResult
+from app.catalog import normalize_brand
+from app.config import EMBED_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL, QDRANT_COLLECTION
+from app.db import get_qdrant
 
 
-# ------------------------------------------------------------------
-# BRAND NORMALIZE MAP
-# ------------------------------------------------------------------
-BRAND_NORMALIZE_MAP: dict[str, str] = {
-    "apple": "Apple",
-    "iphone": "Apple",
-    "samsung": "Samsung",
-    "galaxy": "Samsung",
-    "xiaomi": "Xiaomi",
-    "mi": "Xiaomi",
-    "redmi": "Xiaomi",
-    "oppo": "OPPO",
-    "google": "Google",
-    "pixel": "Google",
-}
+def _embed(query: str) -> list[float]:
+    from openai import OpenAI
+
+    client = OpenAI(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
+    return client.embeddings.create(model=EMBED_MODEL, input=query).data[0].embedding
 
 
-def _normalize_brand(raw: Optional[str]) -> Optional[str]:
-    """Chuan hoa ten thuong hieu cho khop voi du lieu Qdrant."""
-    if not raw:
-        return None
-    key = raw.strip().lower()
-    return BRAND_NORMALIZE_MAP.get(key, raw)
-
-
-# ------------------------------------------------------------------
-# SEARCH
-# ------------------------------------------------------------------
-def search_products(
-    query: str,
-    brand_filter: Optional[str] = None,
-    max_price: Optional[float] = None,
-    top_k: int = 3,
-) -> list[SearchResult]:
-    """Tim san pham trong Qdrant bang semantic search."""
-    from openai import OpenAI as OAIClient
+def build_filter(
+    brand: Optional[str] = None,
+    os: Optional[str] = None,
+    price_min: Optional[float] = None,
+    price_max: Optional[float] = None,
+    ram_min: Optional[int] = None,
+    battery_min: Optional[int] = None,
+    storage_min: Optional[int] = None,
+):
+    """Tao Qdrant Filter tu cac dieu kien; None neu khong co dieu kien nao."""
     from qdrant_client.models import FieldCondition, Filter, MatchValue, Range
 
-    brand_filter = _normalize_brand(brand_filter)
+    must: list = []
+    if brand:
+        must.append(FieldCondition(key="brand", match=MatchValue(value=normalize_brand(brand))))
+    if os:
+        must.append(FieldCondition(key="os", match=MatchValue(value="iOS" if os.lower() == "ios" else "Android")))
+    if price_min is not None or price_max is not None:
+        must.append(FieldCondition(key="price", range=Range(gte=price_min, lte=price_max)))
+    if ram_min is not None:
+        must.append(FieldCondition(key="ram_gb", range=Range(gte=ram_min)))
+    if battery_min is not None:
+        must.append(FieldCondition(key="battery_mah", range=Range(gte=battery_min)))
+    if storage_min is not None:
+        must.append(FieldCondition(key="max_storage_gb", range=Range(gte=storage_min)))
+    return Filter(must=must) if must else None
 
-    embed_client = OAIClient(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
-    resp = embed_client.embeddings.create(model=EMBED_MODEL, input=query)
-    query_vector = resp.data[0].embedding
 
-    conditions: list = []
-    if brand_filter:
-        conditions.append(
-            FieldCondition(key="brand", match=MatchValue(value=brand_filter))
+def search_products(
+    query: str,
+    top_k: int = 5,
+    **filters,
+) -> list[SearchResult]:
+    """Tim san pham: loc theo thong so truoc, roi xep hang theo do giong nghia."""
+    hits = (
+        get_qdrant()
+        .query_points(
+            collection_name=QDRANT_COLLECTION,
+            query=_embed(query),
+            query_filter=build_filter(**filters),
+            limit=top_k,
+            with_payload=True,
         )
-    if max_price:
-        conditions.append(FieldCondition(key="price", range=Range(lte=max_price)))
+        .points
+    )
 
-    qdrant_filter = Filter(must=conditions) if conditions else None
-
-    qdrant = get_qdrant()
-    hits = qdrant.query_points(
-        collection_name=QDRANT_COLLECTION,
-        query=query_vector,
-        query_filter=qdrant_filter,
-        limit=top_k,
-        with_payload=True,
-    ).points
-
-    results: list[SearchResult] = []
-    for hit in hits:
-        p = hit.payload
-        results.append(
-            SearchResult(
-                product_id=p["product_id"],
-                name=p["name"],
-                brand=p["brand"],
-                price=p["price"],
-                score=round(hit.score, 4),
-                description=p["description"],
-            )
+    return [
+        SearchResult(
+            product_id=h.payload["product_id"],
+            name=h.payload["name"],
+            brand=h.payload["brand"],
+            price=h.payload["price"],
+            ram_gb=h.payload["ram_gb"],
+            battery_mah=h.payload["battery_mah"],
+            max_storage_gb=h.payload["max_storage_gb"],
+            main_camera_mp=h.payload["main_camera_mp"],
+            score=round(h.score, 4),
         )
-    return results
+        for h in hits
+    ]

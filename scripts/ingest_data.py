@@ -1,178 +1,79 @@
 """
-Ingest Data - Nap du lieu san pham vao PostgreSQL va Qdrant.
+Ingest Data - nap catalog da trich xuat vao PostgreSQL va Qdrant.
 
-Chay:  python scripts/ingest_data.py  (tu thu muc goc project)
+Doc data/catalog.jsonl (tao boi scripts/extract_catalog.py), bo qua ban ghi khong hop le,
+lay ton kho tu data/stock.json, roi:
+  - PostgreSQL: moi thong so mot cot co kieu (bang products), tao lai bang orders/support_requests
+  - Qdrant:     vector cua text san pham + payload thong so de loc (gia, hang, pin, RAM...)
+
+Chay:  python scripts/ingest_data.py [--catalog data/catalog.jsonl]
 """
 
-import json
-import sys
-import os
+from __future__ import annotations
 
-# Them project root vao sys.path de import app.config
+import argparse
+import json
+import os
+import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.config import (
-    OPENAI_BASE_URL,
-    OPENAI_API_KEY,
-    EMBED_MODEL,
+from app.config import (  # noqa: E402
     EMBED_DIM,
+    EMBED_MODEL,
+    OPENAI_API_KEY,
+    OPENAI_BASE_URL,
     QDRANT_COLLECTION,
+    QDRANT_URL,
 )
 
-
-# ------------------------------------------------------------------
-# DU LIEU MAU - 5 san pham dien thoai
-# ------------------------------------------------------------------
-PRODUCTS = [
-    {
-        "id": 1,
-        "name": "iPhone 15 Pro Max",
-        "brand": "Apple",
-        "price": 34_990_000,
-        "stock": 15,
-        "specs": {
-            "ram": "8GB",
-            "storage": "256GB",
-            "screen": "6.7 inch Super Retina XDR",
-            "battery": "4422 mAh",
-            "chip": "Apple A17 Pro",
-            "camera": "48MP + 12MP + 12MP",
-        },
-        "description": (
-            "iPhone 15 Pro Max la flagship cao cap nhat cua Apple nam 2023, "
-            "duoc trang bi chip A17 Pro 3nm manh me, khung titan sieu ben va "
-            "he thong camera ProRes cho phep quay video 4K 60fps. "
-            "Man hinh Dynamic Island va Always-On Display mang lai trai nghiem hoan toan moi."
-        ),
-        "reviews": [
-            "May cuc ky muot, camera chup dem tot hon han doi truoc.",
-            "Pin dung duoc ca ngay dai ca ngay ma khong lo het pin.",
-            "Gia cao nhung xung dang, build quality titan rat sang.",
-        ],
-    },
-    {
-        "id": 2,
-        "name": "Samsung Galaxy S24 Ultra",
-        "brand": "Samsung",
-        "price": 31_990_000,
-        "stock": 25,
-        "specs": {
-            "ram": "12GB",
-            "storage": "256GB",
-            "screen": "6.8 inch QHD+ Dynamic AMOLED 2X",
-            "battery": "5000 mAh",
-            "chip": "Snapdragon 8 Gen 3",
-            "camera": "200MP + 12MP + 50MP + 10MP",
-        },
-        "description": (
-            "Galaxy S24 Ultra tich hop but S Pen, chip Snapdragon 8 Gen 3 cuc manh "
-            "va camera 200MP hang dau phan khuc. Galaxy AI mang lai nhieu tinh nang "
-            "thong minh nhu phien dich thoi gian thuc, Circle to Search va Generative Edit."
-        ),
-        "reviews": [
-            "S Pen rat tien dung cho viec ghi chu va ky hop dong dien tu.",
-            "Camera 200MP chup chi tiet den tung soi toc, zoom 100x cung kha dung duoc.",
-            "May hoi to va nang nhung doi lai pin rat trau.",
-        ],
-    },
-    {
-        "id": 3,
-        "name": "Xiaomi 14 Ultra",
-        "brand": "Xiaomi",
-        "price": 22_990_000,
-        "stock": 20,
-        "specs": {
-            "ram": "16GB",
-            "storage": "512GB",
-            "screen": "6.73 inch LTPO AMOLED",
-            "battery": "5000 mAh",
-            "chip": "Snapdragon 8 Gen 3",
-            "camera": "50MP Leica Summilux + 50MP + 50MP + 50MP",
-        },
-        "description": (
-            "Xiaomi 14 Ultra hop tac voi Leica cho he thong camera 4 ong kinh "
-            "toan 50MP, ong kinh bien tieu tu 12mm den 120mm. "
-            "Sac nhanh 90W va sac khong day 80W giup day pin trong chua day 40 phut."
-        ),
-        "reviews": [
-            "Camera Leica cho mau sac cuc ky tu nhien, dac biet chup chan dung.",
-            "Sac 90W qua nhanh, 30 phut da duoc 80%, rat tien.",
-            "Gia tot hon iPhone hay Samsung nhieu ma hieu nang khong thua kem.",
-        ],
-    },
-    {
-        "id": 4,
-        "name": "OPPO Find X7 Pro",
-        "brand": "OPPO",
-        "price": 18_990_000,
-        "stock": 30,
-        "specs": {
-            "ram": "12GB",
-            "storage": "256GB",
-            "screen": "6.82 inch LTPO AMOLED",
-            "battery": "5000 mAh",
-            "chip": "Snapdragon 8 Gen 3",
-            "camera": "50MP Hasselblad + 50MP + 50MP",
-        },
-        "description": (
-            "OPPO Find X7 Pro hop tac voi Hasselblad mang den he thong camera "
-            "chuyen nghiep voi kha nang chup RAW 12-bit. "
-            "Man hinh cong 2K 120Hz LTPO va vien pin 5000 mAh voi sac SuperVOOC 100W "
-            "la diem nhan dang gia cua may."
-        ),
-        "reviews": [
-            "Camera Hasselblad cho anh RAW rat dep, dai mau rong.",
-            "Man hinh cong nhin rat sang, xem phim cuc da mat.",
-            "OPPO ColorOS muot va nhieu tinh nang thuc dung.",
-        ],
-    },
-    {
-        "id": 5,
-        "name": "Google Pixel 8 Pro",
-        "brand": "Google",
-        "price": 23_990_000,
-        "stock": 10,
-        "specs": {
-            "ram": "12GB",
-            "storage": "128GB",
-            "screen": "6.7 inch LTPO OLED",
-            "battery": "5050 mAh",
-            "chip": "Google Tensor G3",
-            "camera": "50MP + 48MP + 48MP",
-        },
-        "description": (
-            "Pixel 8 Pro so huu chip Tensor G3 duoc toi uu cho AI, "
-            "mang lai cac tinh nang doc quyen nhu Magic Eraser, Best Take, "
-            "Audio Magic Eraser va Video Boost. "
-            "Day la dien thoai nhan update phan mem va bao mat dai nhat - 7 nam."
-        ),
-        "reviews": [
-            "Tinh nang AI chinh anh Magic Eraser xoa vat the thua cuc ky chinh xac.",
-            "Android thuan Google, update nhanh va khong bloatware.",
-            "Nhiet do may hoi cao khi choi game nang, nhung dung hang ngay thi on.",
-        ],
-    },
-]
+DEFAULT_STOCK = 10
+EMBED_BATCH = 16
 
 
-# ------------------------------------------------------------------
-# HAM TIEN ICH
-# ------------------------------------------------------------------
-def build_text(product: dict) -> str:
-    """Ket hop name, description va reviews thanh doan text cho embedding."""
-    reviews_text = " | ".join(product["reviews"])
-    return (
-        f"Ten san pham: {product['name']}. "
-        f"Thuong hieu: {product['brand']}. "
-        f"Mo ta: {product['description']} "
-        f"Danh gia nguoi dung: {reviews_text}"
+def load_catalog(path: str, stock_path: str) -> list[dict]:
+    from app.catalog import display_name
+
+    stock: dict[str, int] = {}
+    if os.path.exists(stock_path):
+        with open(stock_path, encoding="utf-8") as f:
+            stock = json.load(f)
+
+    products, skipped = [], 0
+    with open(path, encoding="utf-8") as f:
+        for rec in map(json.loads, f):
+            if not rec.get("valid") or not rec.get("spec"):
+                skipped += 1
+                print(f"  Bo qua #{rec['id']} ({rec['source']}): {rec.get('problems')}")
+                continue
+            spec = rec["spec"]
+            products.append(
+                {
+                    "id": rec["id"],
+                    "name": display_name(spec["brand"], spec["model"]),
+                    "stock": int(stock.get(str(rec["id"]), DEFAULT_STOCK)),
+                    "description": rec["text"],
+                    "source": rec["source"],
+                    **spec,
+                }
+            )
+    if skipped:
+        print(f"  Da bo qua {skipped} ban ghi khong hop le")
+    return products
+
+
+def embedding_text(p: dict) -> str:
+    """Text de embed: ten + thong so tom tat + noi dung trang."""
+    storage = "/".join(f"{s}GB" for s in p["storage_gb"])
+    summary = (
+        f"{p['name']} ({p['brand']}, {p['os']}). Chip {p['chipset']}, RAM {p['ram_gb']}GB, "
+        f"bo nho {storage}, man hinh {p['screen_inch']} inch {p['refresh_rate_hz']}Hz, "
+        f"pin {p['battery_mah']}mAh, camera {p['main_camera_mp']}MP."
     )
+    return f"{summary}\n{p['description'][:3000]}"
 
 
-# ------------------------------------------------------------------
-# POSTGRES
-# ------------------------------------------------------------------
-def ingest_postgres() -> int:
+def ingest_postgres(products: list[dict]) -> int:
     from sqlalchemy.orm import Session
 
     from app.db import get_engine
@@ -181,104 +82,133 @@ def ingest_postgres() -> int:
     engine = get_engine()
     reset_db(engine)
 
-    inserted = 0
     with Session(engine) as session:
-        for p in PRODUCTS:
-            row = Product(
-                id=p["id"],
-                name=p["name"],
-                brand=p["brand"],
-                price=p["price"],
-                stock=p["stock"],
-                specs=json.dumps(p["specs"], ensure_ascii=False),
-                description=p["description"],
+        for p in products:
+            session.add(
+                Product(
+                    id=p["id"],
+                    name=p["name"],
+                    brand=p["brand"],
+                    model=p["model"],
+                    price=p["price_vnd"],
+                    stock=p["stock"],
+                    chipset=p["chipset"],
+                    ram_gb=p["ram_gb"],
+                    storage_gb=p["storage_gb"],
+                    screen_inch=p["screen_inch"],
+                    refresh_rate_hz=p["refresh_rate_hz"],
+                    battery_mah=p["battery_mah"],
+                    charging_w=p["charging_w"],
+                    main_camera_mp=p["main_camera_mp"],
+                    weight_g=p["weight_g"],
+                    os=p["os"],
+                    release_year=p["release_year"],
+                    description=p["description"],
+                    source=p["source"],
+                )
             )
-            session.add(row)
-            inserted += 1
         session.commit()
+    return len(products)
 
-    return inserted
 
-
-# ------------------------------------------------------------------
-# QDRANT + EMBEDDING
-# ------------------------------------------------------------------
-def ingest_qdrant() -> int:
+def ingest_qdrant(products: list[dict]) -> int:
     from openai import OpenAI
-    from qdrant_client.models import Distance, PointStruct, VectorParams
+    from qdrant_client.models import Distance, PayloadSchemaType, PointStruct, VectorParams
 
     from app.db import get_qdrant
 
     oai = OpenAI(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
     qdrant = get_qdrant()
 
-    existing = [c.name for c in qdrant.get_collections().collections]
-    if QDRANT_COLLECTION in existing:
+    if qdrant.collection_exists(QDRANT_COLLECTION):
         qdrant.delete_collection(QDRANT_COLLECTION)
-
     qdrant.create_collection(
         collection_name=QDRANT_COLLECTION,
         vectors_config=VectorParams(size=EMBED_DIM, distance=Distance.COSINE),
     )
+    # Index payload de loc nhanh (chi co tac dung voi Qdrant server)
+    indexes = {
+        "brand": PayloadSchemaType.KEYWORD,
+        "os": PayloadSchemaType.KEYWORD,
+        "price": PayloadSchemaType.INTEGER,
+        "ram_gb": PayloadSchemaType.INTEGER,
+        "battery_mah": PayloadSchemaType.INTEGER,
+        "max_storage_gb": PayloadSchemaType.INTEGER,
+    }
+    if QDRANT_URL:
+        for field, kind in indexes.items():
+            qdrant.create_payload_index(QDRANT_COLLECTION, field, kind)
 
     points = []
-    for p in PRODUCTS:
-        text_chunk = build_text(p)
-        response = oai.embeddings.create(model=EMBED_MODEL, input=text_chunk)
-        vector = response.data[0].embedding
-
-        points.append(
-            PointStruct(
-                id=p["id"],
-                vector=vector,
-                payload={
-                    "product_id": p["id"],
-                    "name": p["name"],
-                    "brand": p["brand"],
-                    "price": p["price"],
-                    "description": p["description"],
-                },
+    for start in range(0, len(products), EMBED_BATCH):
+        batch = products[start : start + EMBED_BATCH]
+        resp = oai.embeddings.create(model=EMBED_MODEL, input=[embedding_text(p) for p in batch])
+        for p, item in zip(batch, resp.data):
+            points.append(
+                PointStruct(
+                    id=p["id"],
+                    vector=item.embedding,
+                    payload={
+                        "product_id": p["id"],
+                        "name": p["name"],
+                        "brand": p["brand"],
+                        "os": p["os"],
+                        "price": p["price_vnd"],
+                        "ram_gb": p["ram_gb"],
+                        "battery_mah": p["battery_mah"],
+                        "max_storage_gb": max(p["storage_gb"]),
+                        "main_camera_mp": p["main_camera_mp"],
+                        "refresh_rate_hz": p["refresh_rate_hz"],
+                    },
+                )
             )
-        )
 
     qdrant.upsert(collection_name=QDRANT_COLLECTION, points=points)
     return len(points)
 
 
-# ------------------------------------------------------------------
-# MAIN
-# ------------------------------------------------------------------
-def main():
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--catalog", default="data/catalog.jsonl")
+    parser.add_argument("--stock", default="data/stock.json")
+    args = parser.parse_args()
+
     print("=" * 55)
     print("  Shopping Assistant  |  Ingest Data")
     print("=" * 55)
 
+    if not os.path.exists(args.catalog):
+        sys.exit(f"Khong thay {args.catalog}. Chay scripts/extract_catalog.py truoc.")
+    products = load_catalog(args.catalog, args.stock)
+    print(f"\nDoc {len(products)} san pham hop le tu {args.catalog}")
+
     print("\n[1/2] Nap du lieu vao PostgreSQL...")
     try:
-        pg_count = ingest_postgres()
+        pg_count = ingest_postgres(products)
         print(f"  PostgreSQL: da luu {pg_count} san pham vao bang 'products'")
     except Exception as e:
         print(f"  PostgreSQL FAIL: {e}")
         sys.exit(1)
 
     print("\n[2/2] Tao embedding va nap vector vao Qdrant...")
-    print(f"  Dang goi OpenAI API ({EMBED_MODEL}) de tao vector...")
+    print(f"  Embedding model: {EMBED_MODEL}")
     try:
-        qd_count = ingest_qdrant()
-        print(
-            f"  Qdrant: da upsert {qd_count} vector vao collection '{QDRANT_COLLECTION}'"
-        )
+        qd_count = ingest_qdrant(products)
+        print(f"  Qdrant: da upsert {qd_count} vector vao collection '{QDRANT_COLLECTION}'")
     except Exception as e:
         print(f"  Qdrant FAIL: {e}")
         sys.exit(1)
 
     print()
     print("-" * 55)
-    print("  Ket qua nap du lieu:")
-    print(f"    PostgreSQL  ->  {pg_count} ban ghi  (bang: products)")
-    print(f"    Qdrant      ->  {qd_count} vector   (collection: {QDRANT_COLLECTION})")
+    print(f"  PostgreSQL  ->  {pg_count} ban ghi  (bang: products)")
+    print(f"  Qdrant      ->  {qd_count} vector   (collection: {QDRANT_COLLECTION})")
     print("-" * 55)
     print("  Hoan tat! San sang chay:  python run.py")
+
+    from app.db import get_qdrant
+
+    get_qdrant().close()
 
 
 if __name__ == "__main__":

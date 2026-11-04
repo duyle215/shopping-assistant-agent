@@ -21,3 +21,7 @@ __pycache__/
 
 # Tests
 .pytest_cache/
+
+# Crawled pages (not committed: retailer content)
+data/crawled/
+data/catalog_crawled.jsonl

@@ -14,8 +14,10 @@ def _add_product(engine, product_id: int = 1, stock: int = 1) -> None:
     with engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO products (id, name, brand, price, stock) "
-                "VALUES (:id, 'Test Phone', 'TestBrand', 1000000, :stock)"
+                "INSERT INTO products (id, name, brand, model, price, stock, chipset, "
+                "ram_gb, storage_gb, screen_inch, refresh_rate_hz, battery_mah, "
+                "main_camera_mp, os) VALUES (:id, 'Test Phone', 'TestBrand', 'Phone', "
+                "1000000, :stock, 'Chip', 8, '{128}', 6.1, 60, 4000, 12, 'Android')"
             ),
             {"id": product_id, "stock": stock},
         )

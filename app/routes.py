@@ -4,7 +4,6 @@ Flask routes - Tat ca API endpoints.
 
 from __future__ import annotations
 
-import json
 from flask import Blueprint, jsonify, render_template, request
 from sqlalchemy import text
 
@@ -139,32 +138,28 @@ def api_support_requests():
         return jsonify({"error": str(e)}), 500
 
 
+def _display_specs(p) -> dict[str, str]:
+    """Thong so dang chu cho the san pham tren giao dien."""
+    storage = " / ".join(f"{x // 1024}TB" if x >= 1024 else f"{x}GB" for x in p.storage_gb)
+    battery = f"{p.battery_mah} mAh" + (f", sac {p.charging_w}W" if p.charging_w else "")
+    return {
+        "Chip": p.chipset,
+        "RAM": f"{p.ram_gb} GB",
+        "Bo nho": storage,
+        "Man hinh": f'{p.screen_inch}" {p.refresh_rate_hz}Hz',
+        "Pin": battery,
+        "Camera": f"{p.main_camera_mp} MP",
+    }
+
+
 @api.get("/api/products")
 def api_products():
     try:
-        with get_engine().connect() as conn:
-            rows = conn.execute(
-                text(
-                    "SELECT id, name, brand, price, stock, specs, description "
-                    "FROM products ORDER BY id"
-                )
-            ).fetchall()
+        from app.services.product import list_products
 
-        products = []
-        for r in rows:
-            products.append(
-                {
-                    "id": r.id,
-                    "name": r.name,
-                    "brand": r.brand,
-                    "price": float(r.price),
-                    "stock": int(r.stock),
-                    "specs": (
-                        json.loads(r.specs) if isinstance(r.specs, str) else r.specs
-                    ),
-                    "description": r.description,
-                }
-            )
+        products = [
+            {**p.model_dump(), "specs": _display_specs(p)} for p in list_products()
+        ]
         return jsonify({"total": len(products), "products": products})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
