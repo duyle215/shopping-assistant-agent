@@ -12,8 +12,7 @@ Works with any OpenAI-compatible provider. Tested with Google Gemini's free tier
 
 | What | Result | Details |
 | --- | --- | --- |
-| Conversation task success, against Odoo | **100%** (46/46) in one clean run, all scenarios on one commit | [docs/agent_eval.md](docs/agent_eval.md) |
-| Answers grounded in tool data (LLM judge) | **100%** (43/43) | same report |
+| Conversation scenarios, against Odoo | **46/46 passed** in one clean run; the LLM judge found no answer with facts outside the tool data | [docs/agent_eval.md](docs/agent_eval.md) |
 | Spec extraction, field accuracy | **99.5%** (418/420) | [docs/extraction_eval.md](docs/extraction_eval.md) |
 | Search Hit@1, name / feature queries | 100% / 90% | [docs/search_eval.md](docs/search_eval.md) |
 | Prompt-injection attacks blocked | regex 17/20, LLM 19/20, both **20/20**; 0/15 benign messages blocked | [docs/guardrail_eval.md](docs/guardrail_eval.md) |
