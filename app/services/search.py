@@ -186,11 +186,37 @@ def _load(ids_scores: list[tuple[int, float]]) -> list[SearchResult]:
     ]
 
 
+# Cau hoi "nhat" (re nhat, pin trau nhat...): sap xep bang SQL tren du lieu that
+SORTS: dict[str, str] = {
+    "price_asc": "price ASC",
+    "price_desc": "price DESC",
+    "battery_desc": "battery_mah DESC",
+    "ram_desc": "ram_gb DESC",
+    "refresh_rate_desc": "refresh_rate_hz DESC",
+    "storage_desc": "(SELECT max(s) FROM unnest(storage_gb) s) DESC",
+    "camera_desc": "main_camera_mp DESC",
+}
+
+
+def sorted_ids(sort_by: str, limit: int, **filters) -> list[int]:
+    if sort_by not in SORTS:
+        raise ValueError(f"sort_by phai la mot trong {list(SORTS)}")
+    where, params = _sql_filter(_clean_filters(**filters))
+    sql = text(f"SELECT id FROM products WHERE {where} ORDER BY {SORTS[sort_by]}, id LIMIT :limit")
+    with get_engine().connect() as conn:
+        return [r.id for r in conn.execute(sql, {**params, "limit": limit})]
+
+
 # ------------------------------------------------------------------
 # API
 # ------------------------------------------------------------------
-def search_products(query: str, top_k: int = 5, mode: str = "hybrid", **filters) -> list[SearchResult]:
-    """mode: 'hybrid' (mac dinh), 'dense' (chi theo nghia) hoac 'keyword'."""
+def search_products(
+    query: str, top_k: int = 5, mode: str = "hybrid", sort_by: Optional[str] = None, **filters
+) -> list[SearchResult]:
+    """mode: 'hybrid' (mac dinh), 'dense' (chi theo nghia) hoac 'keyword'.
+    sort_by: sap xep theo thong so thay vi do giong nghia (vd 'refresh_rate_desc')."""
+    if sort_by:
+        return _load([(pid, 0.0) for pid in sorted_ids(sort_by, top_k, **filters)])
     pool = max(top_k * 3, 10)
     rankings = []
     if mode in ("hybrid", "dense"):

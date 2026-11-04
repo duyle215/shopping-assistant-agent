@@ -323,8 +323,9 @@ def main() -> None:
                     verdict = judge(sc["turns"][-1]["user"], outputs, resp.answer_markdown, judge_model)
                 consecutive_errors = 0
             except Exception as exc:
-                if attempt == 1 and "RateLimit" in type(exc).__name__:
-                    print(f"  ...  {sc['id']}: gioi han toc do, cho 60s roi chay lai")
+                transient = any(k in type(exc).__name__ for k in ("RateLimit", "InternalServer", "Quota"))
+                if attempt == 1 and transient:
+                    print(f"  ...  {sc['id']}: loi tam thoi ({type(exc).__name__}), cho 60s roi chay lai")
                     time.sleep(60)
                     continue
                 consecutive_errors += 1

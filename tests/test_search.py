@@ -64,3 +64,15 @@ def test_keyword_refresh_rate_filter(db):
     _add(db, 2, "iPhone 15 Plus")
 
     assert keyword_ids("iphone 15", 5, refresh_rate_min=144) == [1]
+
+
+def test_sort_by_uses_real_specs_and_filters(db):
+    _add(db, 1, "Phone A", price=30_000_000)
+    _add(db, 2, "Phone B", price=10_000_000)
+    _add(db, 3, "Phone C", price=20_000_000)
+    with db.begin() as conn:
+        conn.execute(text("UPDATE products SET refresh_rate_hz = 165 WHERE id = 3"))
+
+    assert [r.product_id for r in search.search_products("re nhat", sort_by="price_asc")] == [2, 3, 1]
+    assert search.search_products("game", sort_by="refresh_rate_desc", top_k=1)[0].product_id == 3
+    assert [r.product_id for r in search.search_products("x", sort_by="price_desc", price_max=25_000_000)] == [3, 2]

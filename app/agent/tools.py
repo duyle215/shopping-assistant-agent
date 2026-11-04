@@ -14,7 +14,7 @@ import json
 from typing import Any
 
 from app.services.compare import ASPECT_KEYS, compare_products
-from app.services.search import search_products
+from app.services.search import SORTS, search_products
 from app.services.product import get_product_details
 from app.services.inventory import (
     check_inventory,
@@ -46,7 +46,9 @@ def _exec_search(args: dict) -> str:
     """Goi search_products va serialize ket qua."""
     filters = {k: args[k] for k in SEARCH_FILTERS if args.get(k) not in (None, "")}
     top_k = int(args.get("top_k") or 5)
-    results = search_products(query=args["query"], top_k=top_k, **filters)
+    results = search_products(
+        query=args["query"], top_k=top_k, sort_by=args.get("sort_by") or None, **filters
+    )
 
     if results:
         return json.dumps([r.model_dump() for r in results], ensure_ascii=False)
@@ -186,6 +188,15 @@ SEARCH_TOOL_DEF = {
                 "refresh_rate_min": {
                     "type": "integer",
                     "description": "Tan so quet man hinh toi thieu (Hz), vd choi game: 144",
+                },
+                "sort_by": {
+                    "type": "string",
+                    "enum": list(SORTS),
+                    "description": (
+                        "Chi dung khi khach hoi 'NHAT': re nhat -> price_asc, dat nhat -> price_desc, "
+                        "pin trau nhat -> battery_desc, RAM lon nhat -> ram_desc, man hinh muot / "
+                        "tan so quet cao nhat -> refresh_rate_desc, bo nho lon nhat -> storage_desc"
+                    ),
                 },
                 "top_k": {"type": "integer", "description": "So ket qua (mac dinh 5)"},
             },

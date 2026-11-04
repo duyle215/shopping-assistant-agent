@@ -42,9 +42,12 @@ def search_products(
     battery_min: Optional[int] = None,
     storage_min: Optional[int] = None,
     refresh_rate_min: Optional[int] = None,
+    sort_by: Optional[str] = None,
     top_k: int = 5,
 ) -> list[dict]:
-    """Find phones by need or name (hybrid search) with optional filters. Prices in VND."""
+    """Find phones by need or name (hybrid search) with optional filters. Prices in VND.
+    sort_by (price_asc, price_desc, battery_desc, ram_desc, refresh_rate_desc, storage_desc,
+    camera_desc) ranks by that spec instead of relevance, for "cheapest", "biggest battery"..."""
     from app.services.search import search_products as _search
 
     filters = dict(
@@ -56,7 +59,9 @@ def search_products(
         storage_min=storage_min,
         refresh_rate_min=refresh_rate_min,
     )
-    results = _search(query, top_k=top_k, **{k: v for k, v in filters.items() if v is not None})
+    results = _search(
+        query, top_k=top_k, sort_by=sort_by, **{k: v for k, v in filters.items() if v is not None}
+    )
     return [r.model_dump(exclude={"score"}) for r in results]
 
 
