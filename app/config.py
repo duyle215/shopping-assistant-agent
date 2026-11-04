@@ -52,7 +52,10 @@ PG_URL = (
 # ------------------------------------------------------------------
 # QDRANT
 # ------------------------------------------------------------------
-QDRANT_PATH = _require("QDRANT_PATH")
+# Mac dinh chay Qdrant local (luu file trong QDRANT_PATH).
+# Set QDRANT_URL (vd http://qdrant:6333) de dung Qdrant server, nhu trong Docker Compose.
+QDRANT_URL = os.getenv("QDRANT_URL") or None
+QDRANT_PATH = os.getenv("QDRANT_PATH", "./qdrant_data")
 QDRANT_COLLECTION = _require("QDRANT_COLLECTION")
 
 # ------------------------------------------------------------------
@@ -65,4 +68,4 @@ MAX_ITERATIONS = 10
 # ------------------------------------------------------------------
 FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
 FLASK_PORT = int(os.getenv("FLASK_PORT", "5000"))
-FLASK_DEBUG = os.getenv("FLASK_DEBUG", "true").lower() == "true"
+FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
