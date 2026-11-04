@@ -141,12 +141,12 @@ def api_support_requests():
 def _display_specs(p) -> dict[str, str]:
     """Thong so dang chu cho the san pham tren giao dien."""
     storage = " / ".join(f"{x // 1024}TB" if x >= 1024 else f"{x}GB" for x in p.storage_gb)
-    battery = f"{p.battery_mah} mAh" + (f", sac {p.charging_w}W" if p.charging_w else "")
+    battery = f"{p.battery_mah} mAh" + (f", sạc {p.charging_w}W" if p.charging_w else "")
     return {
         "Chip": p.chipset,
         "RAM": f"{p.ram_gb} GB",
-        "Bo nho": storage,
-        "Man hinh": f'{p.screen_inch}" {p.refresh_rate_hz}Hz',
+        "Bộ nhớ": storage,
+        "Màn hình": f'{p.screen_inch}" {p.refresh_rate_hz}Hz',
         "Pin": battery,
         "Camera": f"{p.main_camera_mp} MP",
     }

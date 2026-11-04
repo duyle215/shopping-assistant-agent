@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Shopping Assistant - Tu van dien thoai AI</title>
+    <title>Shopping Assistant - Tư vấn điện thoại AI</title>
     <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
     <style>
       *,
@@ -573,7 +573,7 @@
       <span class="logo">📱</span>
       <h1>Shopping Assistant</h1>
       <span class="badge">AI</span>
-      <span class="sub">Tu van dien thoai thong minh</span>
+      <span class="sub">Tư vấn điện thoại thông minh</span>
     </header>
 
     <!-- TABS -->
@@ -581,15 +581,15 @@
       <button class="tab-btn active" onclick="switchTab('chat')">
         Chat AI
       </button>
-      <button class="tab-btn" onclick="switchTab('products')">San pham</button>
-      <button class="tab-btn" onclick="switchTab('admin')">Quan ly</button>
-      <button class="tab-btn" onclick="switchTab('health')">He thong</button>
+      <button class="tab-btn" onclick="switchTab('products')">Sản phẩm</button>
+      <button class="tab-btn" onclick="switchTab('admin')">Quản lý</button>
+      <button class="tab-btn" onclick="switchTab('health')">Hệ thống</button>
       <button
         class="new-chat-btn"
         onclick="newChat()"
-        title="Bat dau hoi thoai moi"
+        title="Bắt đầu hội thoại mới"
       >
-        + Hoi thoai moi
+        + Hội thoại mới
       </button>
     </div>
 
@@ -600,15 +600,15 @@
           <div class="avatar">🤖</div>
           <div>
             <div class="bubble">
-              Xin chao! Toi la <strong>Shopping Assistant</strong>, tu van vien
-              dien thoai AI cua ban.<br /><br />
-              Ban co the hoi toi ve:<br />
-              - Tim dien thoai phu hop nhu cau<br />
-              - So sanh cac san pham<br />
-              - Thong so ky thuat chi tiet<br /><br />
+              Xin chào! Mình là <strong>Shopping Assistant</strong>, trợ lý
+              tư vấn điện thoại.<br /><br />
+              Bạn có thể hỏi mình về:<br />
+              - Tìm điện thoại hợp nhu cầu và ngân sách<br />
+              - So sánh các mẫu máy<br />
+              - Tồn kho, đặt hàng, hoặc gặp nhân viên<br /><br />
               <em
-                >Vi du: "Dien thoai Samsung pin trau duoi 25 trieu?", "So sanh
-                iPhone vs Galaxy"</em
+                >Ví dụ: "Samsung dưới 10 triệu pin trâu?", "So sánh iPhone 16 Pro
+                và Galaxy S24 Ultra"</em
               >
             </div>
           </div>
@@ -618,13 +618,13 @@
       <div class="input-bar">
         <textarea
           id="userInput"
-          placeholder="Hoi ve dien thoai ban muon mua..."
+          placeholder="Hỏi về điện thoại bạn muốn mua..."
           rows="1"
           onkeydown="handleKey(event)"
           oninput="autoResize(this)"
         ></textarea>
         <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-          Gui
+          Gửi
         </button>
       </div>
     </div>
@@ -632,11 +632,11 @@
     <!-- PRODUCTS PANEL -->
     <div id="panel-products" class="tab-panel">
       <div class="products-header">
-        <h2>Danh sach san pham</h2>
-        <button class="refresh-btn" onclick="loadProducts()">Tai lai</button>
+        <h2>Danh sách sản phẩm</h2>
+        <button class="refresh-btn" onclick="loadProducts()">Tải lại</button>
       </div>
       <div class="products-grid" id="productsGrid">
-        <p style="color: #999; font-size: 0.9rem">Dang tai...</p>
+        <p style="color: #999; font-size: 0.9rem">Đang tải...</p>
       </div>
     </div>
 
@@ -650,31 +650,31 @@
         "
       >
         <h2 style="font-size: 1.1rem; font-weight: 600">
-          Quan ly kho hang, don hang & Ho tro
+          Quản lý kho hàng, đơn hàng & hỗ trợ
         </h2>
-        <button class="refresh-btn" onclick="loadAdmin()">Tai lai</button>
+        <button class="refresh-btn" onclick="loadAdmin()">Tải lại</button>
       </div>
 
       <div class="admin-section">
-        <h2>Ton kho <span id="stockCount" class="count-badge">0</span></h2>
+        <h2>Tồn kho <span id="stockCount" class="count-badge">0</span></h2>
         <div id="stockTable">
-          <p style="color: #999; font-size: 0.85rem">Dang tai...</p>
+          <p style="color: #999; font-size: 0.85rem">Đang tải...</p>
         </div>
       </div>
 
       <div class="admin-section">
-        <h2>Don hang <span id="ordersCount" class="count-badge">0</span></h2>
+        <h2>Đơn hàng <span id="ordersCount" class="count-badge">0</span></h2>
         <div id="ordersTable">
-          <p style="color: #999; font-size: 0.85rem">Chua co don hang.</p>
+          <p style="color: #999; font-size: 0.85rem">Chưa có đơn hàng.</p>
         </div>
       </div>
 
       <div class="admin-section">
         <h2>
-          Yeu cau ho tro <span id="supportCount" class="count-badge">0</span>
+          Yêu cầu hỗ trợ <span id="supportCount" class="count-badge">0</span>
         </h2>
         <div id="supportTable">
-          <p style="color: #999; font-size: 0.85rem">Chua co yeu cau.</p>
+          <p style="color: #999; font-size: 0.85rem">Chưa có yêu cầu.</p>
         </div>
       </div>
     </div>
@@ -682,13 +682,13 @@
     <!-- HEALTH PANEL -->
     <div id="panel-health" class="tab-panel">
       <div class="health-card">
-        <h2>Trang thai he thong</h2>
+        <h2>Trạng thái hệ thống</h2>
         <div id="healthRows">
-          <div class="health-row"><span>Dang kiem tra...</span></div>
+          <div class="health-row"><span>Đang kiểm tra...</span></div>
         </div>
       </div>
       <button class="health-refresh" onclick="loadHealth()">
-        Kiem tra lai
+        Kiểm tra lại
       </button>
     </div>
 
@@ -819,7 +819,7 @@
           if (data.error) {
             appendMsg(
               "bot",
-              `<span style="color:#c62828">Loi: ${escapeHtml(data.error)}</span>`,
+              `<span style="color:#c62828">Lỗi: ${escapeHtml(data.error)}</span>`,
             );
           } else {
             // Cap nhat session_id tu server (phong truong hop server tao moi)
@@ -838,7 +838,7 @@
           removeTyping();
           appendMsg(
             "bot",
-            `<span style="color:#c62828">Khong the ket noi den server.</span>`,
+            `<span style="color:#c62828">Không thể kết nối đến server.</span>`,
           );
         } finally {
           btn.disabled = false;
@@ -857,7 +857,7 @@
       async function loadProducts() {
         const grid = document.getElementById("productsGrid");
         grid.innerHTML =
-          '<p style="color:#999;font-size:.9rem">Dang tai...</p>';
+          '<p style="color:#999;font-size:.9rem">Đang tải...</p>';
 
         try {
           const res = await fetch("/api/products");
@@ -878,13 +878,13 @@
             card.className = "product-card";
 
             let stockCls = "stock-ok";
-            let stockText = `Con ${p.stock} chiec`;
+            let stockText = `Còn ${p.stock} chiếc`;
             if (p.stock === 0) {
               stockCls = "stock-out";
-              stockText = "Het hang";
+              stockText = "Hết hàng";
             } else if (p.stock <= 5) {
               stockCls = "stock-low";
-              stockText = `Chi con ${p.stock}`;
+              stockText = `Chỉ còn ${p.stock}`;
             }
 
             card.innerHTML = `
@@ -893,19 +893,19 @@
         <h3>${p.name}</h3>
         <div class="price">${Number(p.price).toLocaleString("vi-VN")} VND</div>
         <ul class="specs">${specsHtml}</ul>
-        <button class="ask-btn" onclick="askAbout('${p.name}')">Hoi ve san pham nay</button>
+        <button class="ask-btn" onclick="askAbout('${p.name}')">Hỏi về sản phẩm này</button>
       `;
             grid.appendChild(card);
           });
         } catch {
-          grid.innerHTML = '<p style="color:red">Khong the tai du lieu.</p>';
+          grid.innerHTML = '<p style="color:red">Không thể tải dữ liệu.</p>';
         }
       }
 
       function askAbout(name) {
         switchTab("chat");
         document.getElementById("userInput").value =
-          `Cho toi biet chi tiet ve ${name}`;
+          `Cho mình biết chi tiết về ${name}`;
         document.getElementById("userInput").focus();
       }
 
@@ -920,11 +920,11 @@
 
           if (!sData.stock || sData.stock.length === 0) {
             sEl.innerHTML =
-              '<p style="color:#999;font-size:.85rem">Chua co san pham.</p>';
+              '<p style="color:#999;font-size:.85rem">Chưa có sản phẩm.</p>';
           } else {
             let html = '<table class="admin-table"><thead><tr>';
             html +=
-              "<th>ID</th><th>San pham</th><th>Thuong hieu</th><th>Gia</th><th>Ton kho</th><th>Thao tac</th>";
+              "<th>ID</th><th>Sản phẩm</th><th>Hãng</th><th>Giá</th><th>Tồn kho</th><th>Thao tác</th>";
             html += "</tr></thead><tbody>";
             sData.stock.forEach((s) => {
               const cls =
@@ -943,7 +943,7 @@
                   <input type="number" id="stock-input-${s.product_id}" value="${s.stock}"
                     min="0" style="width:60px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;text-align:center">
                   <button class="refresh-btn" style="font-size:.75rem;padding:3px 8px;margin-left:4px"
-                    onclick="updateStock(${s.product_id})">Cap nhat</button>
+                    onclick="updateStock(${s.product_id})">Cập nhật</button>
                 </td>
               </tr>`;
             });
@@ -952,7 +952,7 @@
           }
         } catch {
           document.getElementById("stockTable").innerHTML =
-            '<p style="color:red">Loi tai ton kho.</p>';
+            '<p style="color:red">Lỗi tải tồn kho.</p>';
         }
 
         // Load orders
@@ -964,11 +964,11 @@
 
           if (!data.orders || data.orders.length === 0) {
             el.innerHTML =
-              '<p style="color:#999;font-size:.85rem">Chua co don hang nao.</p>';
+              '<p style="color:#999;font-size:.85rem">Chưa có đơn hàng nào.</p>';
           } else {
             let html = '<table class="admin-table"><thead><tr>';
             html +=
-              "<th>ID</th><th>San pham</th><th>SL</th><th>Khach hang</th><th>SDT</th><th>Trang thai</th><th>Ghi chu</th><th>Thoi gian</th>";
+              "<th>ID</th><th>Sản phẩm</th><th>SL</th><th>Khách hàng</th><th>SĐT</th><th>Trạng thái</th><th>Ghi chú</th><th>Thời gian</th>";
             html += "</tr></thead><tbody>";
             data.orders.forEach((o) => {
               const stCls =
@@ -976,7 +976,7 @@
                   ? "status-confirmed"
                   : "status-pending";
               const stLabel =
-                o.status === "confirmed" ? "Da xac nhan" : "Cho restock";
+                o.status === "confirmed" ? "Đã xác nhận" : "Chờ nhập hàng";
               html += `<tr>
                 <td>${o.id}</td>
                 <td>${o.product_name}</td>
@@ -993,7 +993,7 @@
           }
         } catch {
           document.getElementById("ordersTable").innerHTML =
-            '<p style="color:red">Loi tai don hang.</p>';
+            '<p style="color:red">Lỗi tải đơn hàng.</p>';
         }
 
         // Load support requests
@@ -1005,16 +1005,16 @@
 
           if (!data.requests || data.requests.length === 0) {
             el.innerHTML =
-              '<p style="color:#999;font-size:.85rem">Chua co yeu cau ho tro nao.</p>';
+              '<p style="color:#999;font-size:.85rem">Chưa có yêu cầu hỗ trợ nào.</p>';
           } else {
             let html = '<table class="admin-table"><thead><tr>';
             html +=
-              "<th>ID</th><th>Ly do</th><th>Khach hang</th><th>SDT</th><th>Trang thai</th><th>Thoi gian</th>";
+              "<th>ID</th><th>Lý do</th><th>Khách hàng</th><th>SĐT</th><th>Trạng thái</th><th>Thời gian</th>";
             html += "</tr></thead><tbody>";
             data.requests.forEach((r) => {
               const stCls =
                 r.status === "resolved" ? "status-confirmed" : "status-pending";
-              const stLabel = r.status === "resolved" ? "Da xu ly" : "Dang cho";
+              const stLabel = r.status === "resolved" ? "Đã xử lý" : "Đang chờ";
               html += `<tr>
                 <td>${r.id}</td>
                 <td style="max-width:300px">${r.reason}</td>
@@ -1029,7 +1029,7 @@
           }
         } catch {
           document.getElementById("supportTable").innerHTML =
-            '<p style="color:red">Loi tai yeu cau ho tro.</p>';
+            '<p style="color:red">Lỗi tải yêu cầu hỗ trợ.</p>';
         }
       }
 
@@ -1037,7 +1037,7 @@
         const input = document.getElementById(`stock-input-${productId}`);
         const newStock = parseInt(input.value, 10);
         if (isNaN(newStock) || newStock < 0) {
-          alert("So luong phai la so nguyen >= 0");
+          alert("Số lượng phải là số nguyên >= 0");
           return;
         }
         try {
@@ -1048,14 +1048,14 @@
           });
           const data = await res.json();
           if (data.error) {
-            alert("Loi: " + data.error);
+            alert("Lỗi: " + data.error);
           } else {
             alert(data.message);
             loadAdmin();
             loadProducts();
           }
         } catch {
-          alert("Khong the cap nhat ton kho.");
+          alert("Không thể cập nhật tồn kho.");
         }
       }
 
@@ -1063,7 +1063,7 @@
       async function loadHealth() {
         const rows = document.getElementById("healthRows");
         rows.innerHTML =
-          '<div class="health-row"><span>Dang kiem tra...</span></div>';
+          '<div class="health-row"><span>Đang kiểm tra...</span></div>';
 
         try {
           const res = await fetch("/api/health");
@@ -1085,7 +1085,7 @@
             .join("");
         } catch {
           rows.innerHTML =
-            '<div class="health-row"><span style="color:red">Khong the ket noi server.</span></div>';
+            '<div class="health-row"><span style="color:red">Không thể kết nối server.</span></div>';
         }
       }
     </script>
