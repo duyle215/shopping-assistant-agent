@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import json
 from flask import Blueprint, jsonify, render_template, request
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
-from app.config import PG_URL, QDRANT_PATH
+from app.db import get_engine, get_qdrant
 
 api = Blueprint("api", __name__)
 
@@ -142,8 +142,7 @@ def api_support_requests():
 @api.get("/api/products")
 def api_products():
     try:
-        engine = create_engine(PG_URL, echo=False)
-        with engine.connect() as conn:
+        with get_engine().connect() as conn:
             rows = conn.execute(
                 text(
                     "SELECT id, name, brand, price, stock, specs, description "
@@ -177,7 +176,7 @@ def api_health():
 
     # Postgres
     try:
-        with create_engine(PG_URL).connect() as c:
+        with get_engine().connect() as c:
             c.execute(text("SELECT 1"))
         results["postgres"] = "OK"
     except Exception as e:
@@ -185,9 +184,7 @@ def api_health():
 
     # Qdrant
     try:
-        from qdrant_client import QdrantClient
-
-        QdrantClient(path=QDRANT_PATH).get_collections()
+        get_qdrant().get_collections()
         results["qdrant"] = "OK"
     except Exception as e:
         results["qdrant"] = f"FAIL: {e}"

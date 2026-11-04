@@ -11,8 +11,8 @@ from app.config import (
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
     QDRANT_COLLECTION,
-    QDRANT_PATH,
 )
+from app.db import get_qdrant
 from app.agent.schemas import SearchResult
 
 
@@ -52,7 +52,6 @@ def search_products(
 ) -> list[SearchResult]:
     """Tim san pham trong Qdrant bang semantic search."""
     from openai import OpenAI as OAIClient
-    from qdrant_client import QdrantClient
     from qdrant_client.models import FieldCondition, Filter, MatchValue, Range
 
     brand_filter = _normalize_brand(brand_filter)
@@ -71,7 +70,7 @@ def search_products(
 
     qdrant_filter = Filter(must=conditions) if conditions else None
 
-    qdrant = QdrantClient(path=QDRANT_PATH)
+    qdrant = get_qdrant()
     hits = qdrant.query_points(
         collection_name=QDRANT_COLLECTION,
         query=query_vector,

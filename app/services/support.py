@@ -13,7 +13,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from app.config import PG_URL
+from sqlalchemy import text
+
+from app.db import get_engine
 
 logger = logging.getLogger("support")
 
@@ -28,9 +30,7 @@ def request_human_support(
     customer_phone: Optional[str] = None,
 ) -> dict:
     """Tao yeu cau ho tro tu nhan vien."""
-    from sqlalchemy import create_engine, text
-
-    engine = create_engine(PG_URL, echo=False)
+    engine = get_engine()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     with engine.connect() as conn:
@@ -80,9 +80,7 @@ def save_customer_info_to_support(
     customer_phone: str,
 ) -> dict:
     """Cap nhat thong tin khach hang vao yeu cau ho tro gan nhat."""
-    from sqlalchemy import create_engine, text
-
-    engine = create_engine(PG_URL, echo=False)
+    engine = get_engine()
 
     with engine.connect() as conn:
         row = conn.execute(
@@ -122,9 +120,7 @@ def save_customer_info_to_support(
 
 def get_pending_support_requests() -> list[dict]:
     """Lay danh sach yeu cau ho tro (cho nhan vien/admin xem)."""
-    from sqlalchemy import create_engine, text
-
-    engine = create_engine(PG_URL, echo=False)
+    engine = get_engine()
     with engine.connect() as conn:
         rows = conn.execute(
             text(

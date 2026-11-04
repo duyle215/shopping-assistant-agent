@@ -7,15 +7,15 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from app.config import PG_URL
+from sqlalchemy import text
+
+from app.db import get_engine
 from app.agent.schemas import ProductMetadata
 
 
 def get_product_details(product_id: int) -> Optional[ProductMetadata]:
     """Lay thong so ky thuat chi tiet tu Postgres."""
-    from sqlalchemy import create_engine, text
-
-    engine = create_engine(PG_URL, echo=False)
+    engine = get_engine()
     with engine.connect() as conn:
         row = conn.execute(
             text(

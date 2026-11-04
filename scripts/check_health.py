@@ -10,7 +10,7 @@ import sys
 # Them project root vao sys.path de import app.config
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.config import PG_HOST, PG_PORT, PG_DB, PG_USER, PG_PASSWORD, QDRANT_PATH
+from app.config import PG_HOST, PG_PORT, PG_DB, PG_USER, PG_PASSWORD, QDRANT_PATH, QDRANT_URL
 
 
 # ------------------------------------------------------------------
@@ -59,10 +59,12 @@ def check_qdrant():
 
     try:
         existed_before = os.path.isdir(QDRANT_PATH)
-        client = QdrantClient(path=QDRANT_PATH)
+        client = QdrantClient(url=QDRANT_URL) if QDRANT_URL else QdrantClient(path=QDRANT_PATH)
         collections = client.get_collections().collections
 
-        if not existed_before:
+        if QDRANT_URL:
+            print(f"Qdrant:   OK  (Server: {QDRANT_URL})")
+        elif not existed_before:
             print(f"Qdrant:   OK  (Da tao thu muc moi: '{QDRANT_PATH}')")
         else:
             print(f"Qdrant:   OK  (Su dung thu muc hien co: '{QDRANT_PATH}')")

@@ -15,7 +15,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from app.config import PG_URL
+from sqlalchemy import text
+
+from app.db import get_engine
 
 logger = logging.getLogger("inventory")
 
@@ -25,9 +27,7 @@ logger = logging.getLogger("inventory")
 # ------------------------------------------------------------------
 def check_inventory(product_id: int) -> dict:
     """Kiem tra ton kho cua san pham theo ID."""
-    from sqlalchemy import create_engine, text
-
-    engine = create_engine(PG_URL, echo=False)
+    engine = get_engine()
     with engine.connect() as conn:
         row = conn.execute(
             text("SELECT id, name, brand, price, stock FROM products WHERE id = :pid"),
@@ -66,14 +66,20 @@ def place_order(
     - Neu du hang: tru stock, tao don thanh cong.
     - Neu khong du: tao don pending + restock request.
     """
-    from sqlalchemy import create_engine, text
+    if quantity <= 0:
+        return {"error": "So luong dat hang phai lon hon 0."}
 
-    engine = create_engine(PG_URL, echo=False)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    with engine.connect() as conn:
+    # engine.begin(): mot transaction, tu commit khi xong, rollback khi loi.
+    # FOR UPDATE khoa dong san pham: hai don dat cung luc phai doi nhau,
+    # nen khong the cung doc stock cu roi cung tru (ban vuot ton kho).
+    with get_engine().begin() as conn:
         row = conn.execute(
-            text("SELECT id, name, brand, stock FROM products WHERE id = :pid"),
+            text(
+                "SELECT id, name, brand, stock FROM products "
+                "WHERE id = :pid FOR UPDATE"
+            ),
             {"pid": product_id},
         ).fetchone()
 
@@ -82,9 +88,6 @@ def place_order(
 
         current_stock = int(row.stock)
         product_name = row.name
-
-        if quantity <= 0:
-            return {"error": "So luong dat hang phai lon hon 0."}
 
         if current_stock >= quantity:
             new_stock = current_stock - quantity
@@ -110,7 +113,6 @@ def place_order(
                     "ts": now,
                 },
             )
-            conn.commit()
 
             logger.info(
                 f"[Order OK] {product_name} x{quantity}, "
@@ -149,7 +151,6 @@ def place_order(
                     "ts": now,
                 },
             )
-            conn.commit()
 
             logger.info(
                 f"[Order PENDING] {product_name} x{quantity}, "
@@ -186,9 +187,7 @@ def save_customer_info_to_order(
     customer_phone: str,
 ) -> dict:
     """Cap nhat thong tin khach hang vao don pending gan nhat."""
-    from sqlalchemy import create_engine, text
-
-    engine = create_engine(PG_URL, echo=False)
+    engine = get_engine()
 
     with engine.connect() as conn:
         row = conn.execute(
@@ -227,15 +226,12 @@ def save_customer_info_to_order(
 
 def update_stock(product_id: int, new_stock: int) -> dict:
     """Cap nhat so luong ton kho cua san pham (nhan vien kho dung)."""
-    from sqlalchemy import create_engine, text
-
     if new_stock < 0:
         return {"error": "So luong ton kho khong the am."}
 
-    engine = create_engine(PG_URL, echo=False)
-    with engine.connect() as conn:
+    with get_engine().begin() as conn:
         row = conn.execute(
-            text("SELECT id, name, stock FROM products WHERE id = :pid"),
+            text("SELECT id, name, stock FROM products WHERE id = :pid FOR UPDATE"),
             {"pid": product_id},
         ).fetchone()
 
@@ -247,7 +243,6 @@ def update_stock(product_id: int, new_stock: int) -> dict:
             text("UPDATE products SET stock = :s WHERE id = :pid"),
             {"s": new_stock, "pid": product_id},
         )
-        conn.commit()
 
     logger.info(f"[Stock Update] {row.name}: {old_stock} -> {new_stock}")
 
@@ -262,9 +257,7 @@ def update_stock(product_id: int, new_stock: int) -> dict:
 
 def get_all_stock() -> list[dict]:
     """Xem ton kho toan bo san pham."""
-    from sqlalchemy import create_engine, text
-
-    engine = create_engine(PG_URL, echo=False)
+    engine = get_engine()
     with engine.connect() as conn:
         rows = conn.execute(
             text("SELECT id, name, brand, price, stock FROM products ORDER BY id")
@@ -284,9 +277,7 @@ def get_all_stock() -> list[dict]:
 
 def get_pending_orders() -> list[dict]:
     """Lay danh sach don hang (cho nhan vien/admin xem)."""
-    from sqlalchemy import create_engine, text
-
-    engine = create_engine(PG_URL, echo=False)
+    engine = get_engine()
     with engine.connect() as conn:
         rows = conn.execute(
             text(
