@@ -115,3 +115,16 @@ def recent(limit: int = 50, session_id: Optional[str] = None) -> list[dict]:
     with get_engine().connect() as conn:
         rows = conn.execute(text(query), params).fetchall()
     return [{**dict(r._mapping), "created_at": r.created_at.isoformat()} for r in rows]
+
+
+def active_ms(turn_id: str) -> Optional[int]:
+    """Thoi gian he thong that su xu ly mot luot (LLM + tool), khong tinh luc cho khach bam xac nhan."""
+    try:
+        with get_engine().connect() as conn:
+            value = conn.execute(
+                text("SELECT sum(latency_ms) FROM traces WHERE turn_id = :t AND kind IN ('llm', 'tool')"),
+                {"t": turn_id},
+            ).scalar()
+        return int(value) if value is not None else None
+    except Exception:  # pragma: no cover
+        return None

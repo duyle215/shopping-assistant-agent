@@ -353,14 +353,21 @@ def too_many_rounds(state: State, config) -> dict:
 
 def finish(state: State, config) -> dict:
     """Luu luot vao transcript (chi user + cau tra loi cuoi) va ghi trace tong."""
+    wall_ms = int((time.time() - state.get("started_at", time.time())) * 1000)
     tracing.record(
         "turn",
         state.get("intent") or "unknown",
         session_id=_session_id(config),
         turn_id=state.get("turn_id"),
-        latency_ms=int((time.time() - state.get("started_at", time.time())) * 1000),
+        # Thoi gian xu ly that (LLM + tool); thoi gian tinh ca luc cho khach o detail
+        latency_ms=tracing.active_ms(state.get("turn_id")) if state.get("turn_id") else wall_ms,
         ok=not state.get("warning"),
-        detail={"tools": tools_called(state["turn"]), "warning": state.get("warning"), "retried": state.get("retried", [])},
+        detail={
+            "tools": tools_called(state["turn"]),
+            "warning": state.get("warning"),
+            "retried": state.get("retried", []),
+            "wall_ms": wall_ms,
+        },
     )
     return {
         "transcript": [

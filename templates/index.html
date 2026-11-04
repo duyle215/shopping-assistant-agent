@@ -1297,7 +1297,7 @@
             .join("");
           el.innerHTML = `<div class="stats-grid">
               <div class="stat"><div class="v">${num(d.turns.count)}</div><div class="k">Lượt chat</div></div>
-              <div class="stat"><div class="v">${ms(d.turns.avg_ms)} / ${ms(d.turns.p95_ms)}</div><div class="k">Thời gian một lượt (TB / p95)</div></div>
+              <div class="stat"><div class="v">${ms(d.turns.avg_ms)} / ${ms(d.turns.p95_ms)}</div><div class="k">Thời gian xử lý một lượt (TB / p95)</div></div>
               <div class="stat"><div class="v">${num(d.llm.calls)}</div><div class="k">Lần gọi LLM · TB ${ms(d.llm.avg_ms)}</div></div>
               <div class="stat"><div class="v">${num(d.llm.prompt_tokens)} / ${num(d.llm.completion_tokens)}</div><div class="k">Token vào / ra</div></div>
             </div>

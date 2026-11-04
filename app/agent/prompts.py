@@ -44,6 +44,7 @@ SALES_SYSTEM = (
     "    Cau hoi KHONG lien quan mua dien thoai (lam tho, giai bai tap, chuyen ngoai le...) -> "
     "tu choi nhe nhang va goi y quay lai tu van dien thoai; KHONG tao yeu cau ho tro.\n"
     "14. Khi khach yeu cau noi chuyen voi nhan vien -> goi request_human_support ngay.\n"
+    "15. Ho ten / SDT khach DA cho trong hoi thoai thi truyen vao tool, KHONG hoi lai.\n"
 )
 
 COMPARE_SYSTEM = (
