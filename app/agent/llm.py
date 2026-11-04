@@ -15,12 +15,14 @@ from typing import Callable, Optional
 
 from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
 
-from app.config import AGENT_API_KEY, AGENT_BASE_URL, LLM_MODEL
+from app.config import AGENT_API_KEY, AGENT_BASE_URL, LLM_FALLBACK_MODEL, LLM_MODEL
 
 logger = logging.getLogger("llm")
 
 _client: Optional[OpenAI] = None
 MAX_RETRY_WAIT = 90.0
+# model -> thoi diem het "phat" quota; trong luc do goi thang model du phong
+_exhausted_until: dict[str, float] = {}
 
 
 def client() -> OpenAI:
@@ -77,8 +79,29 @@ def _assemble(stream, on_token: Optional[Callable[[str], None]]) -> tuple[dict, 
     return message, usage
 
 
+class QuotaExhausted(Exception):
+    """Provider bao phai cho qua lau (vd het quota ngay): khong ngoi cho, chuyen model hoac bao loi."""
+
+    def __init__(self, model: str, wait_seconds: Optional[float]):
+        self.model = model
+        self.wait_seconds = wait_seconds
+        mins = f"{wait_seconds / 60:.0f} phut" if wait_seconds else "?"
+        super().__init__(f"Model {model} het han muc, phai cho khoang {mins}")
+
+
+def _parse_duration(text: str) -> Optional[float]:
+    """'40m50.9s' -> 2450.9 ; '1h2m3s' -> 3723 ; '37s' -> 37."""
+    import re
+
+    m = re.fullmatch(r"(?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", text.strip())
+    if not m or not any(m.groups()):
+        return None
+    h, mi, sec = m.groups()
+    return int(h or 0) * 3600 + int(mi or 0) * 60 + float(sec or 0)
+
+
 def _retry_after(exc: Exception) -> Optional[float]:
-    """Doc thoi gian cho tu loi 429 (header Retry-After hoac retryDelay cua Gemini)."""
+    """Thoi gian cho tu loi 429: header Retry-After, 'Please retry in 40m50s' hoac retryDelay."""
     import re
 
     response = getattr(exc, "response", None)
@@ -88,9 +111,14 @@ def _retry_after(exc: Exception) -> Optional[float]:
             return float(header)
         except ValueError:
             pass
-    text = str(getattr(exc, "body", "")) + str(exc)
-    m = re.search(r"retry(?:Delay)?[\"':\s]+(?:in\s+)?([\d.]+)\s*s", text, re.IGNORECASE)
-    return float(m.group(1)) if m else None
+    text = str(getattr(exc, "body", "")) + " " + str(exc)
+    for pattern in (r"retry in ((?:\d+h)?(?:\d+m)?[\d.]+s)", r"retryDelay['\"]?\s*:\s*['\"]([\dhms.]+)['\"]"):
+        m = re.search(pattern, text, re.IGNORECASE)
+        if m:
+            value = _parse_duration(m.group(1))
+            if value is not None:
+                return value
+    return None
 
 
 def chat(
@@ -100,7 +128,51 @@ def chat(
     model: str = LLM_MODEL,
     retries: int = 5,
 ) -> LLMResult:
-    """Goi model (stream). Thu lai khi bi gioi han toc do / loi tam thoi, chi khi chua stream chu nao."""
+    """Goi model chinh; neu het quota (phai cho lau) thi chuyen sang LLM_FALLBACK_MODEL."""
+    models = [model]
+    if LLM_FALLBACK_MODEL and LLM_FALLBACK_MODEL != model:
+        models.append(LLM_FALLBACK_MODEL)
+    now = time.time()
+    available = [m for m in models if _exhausted_until.get(m, 0) <= now] or models[-1:]
+    last: Optional[QuotaExhausted] = None
+    for i, current in enumerate(available):
+        try:
+            # Doi model so voi model chinh -> chu ky thought_signature cu khong con hop le
+            msgs = messages if current == model else _for_other_model(messages)
+            return _chat_one(msgs, tools, on_token, current, retries)
+        except QuotaExhausted as exc:
+            last = exc
+            _exhausted_until[current] = time.time() + min(exc.wait_seconds or 300, 3600)
+            if i + 1 < len(available):
+                logger.warning(f"[LLM] {exc}. Chuyen sang {available[i + 1]}")
+    raise last  # type: ignore[misc]
+
+
+def _for_other_model(messages: list[dict]) -> list[dict]:
+    """thought_signature chi hop le voi model da tao ra no. Khi doi model giua luot,
+    thay bang chu ky gia ma Gemini chap nhan cho lich su chuyen tu noi khac."""
+    out = []
+    for m in messages:
+        if m.get("tool_calls"):
+            calls = []
+            for c in m["tool_calls"]:
+                c = dict(c)
+                if "extra_content" in c:
+                    c["extra_content"] = {"google": {"thought_signature": "skip_thought_signature_validator"}}
+                calls.append(c)
+            m = {**m, "tool_calls": calls}
+        out.append(m)
+    return out
+
+
+def _chat_one(
+    messages: list[dict],
+    tools: Optional[list[dict]],
+    on_token: Optional[Callable[[str], None]],
+    model: str,
+    retries: int,
+) -> LLMResult:
+    """Mot model, stream. Thu lai khi bi gioi han toc do / loi tam thoi, chi khi chua stream chu nao."""
     delay = 2.0
     for attempt in range(1, retries + 1):
         started = time.time()
@@ -138,14 +210,20 @@ def chat(
             transient = not isinstance(exc, APIStatusError) or exc.status_code >= 500 or isinstance(
                 exc, RateLimitError
             )
-            if not transient or emitted or attempt == retries:
+            if not transient or emitted:
                 raise
             wait = delay
             if isinstance(exc, RateLimitError):
-                # Gioi han theo phut cua free tier: cho theo goi y cua provider neu co
-                # Gioi han tren 90s: thong bao loi doi khi chua so khong phai thoi gian cho
-                wait = min(max(_retry_after(exc) or 0, 15.0 * attempt), MAX_RETRY_WAIT)
-                logger.warning(f"[LLM] 429: {str(exc)[:300]}")
+                hint = _retry_after(exc)
+                logger.warning(f"[LLM] 429 {model}: {str(exc)[:200]}")
+                if hint is not None and hint > MAX_RETRY_WAIT:
+                    # Het quota ngay/gio: cho cung vo ich
+                    raise QuotaExhausted(model, hint) from exc
+                wait = max(hint or 0, 15.0 * attempt)
+            if attempt == retries:
+                if isinstance(exc, RateLimitError):
+                    raise QuotaExhausted(model, None) from exc
+                raise
             logger.warning(f"[LLM] {type(exc).__name__}, thu lai sau {wait:.0f}s")
             time.sleep(wait)
             delay *= 2

@@ -32,6 +32,8 @@ OPENAI_API_KEY = _require("OPENAI_API_KEY")
 EMBED_MODEL = _require("EMBED_MODEL")
 EMBED_DIM = int(_require("EMBED_DIM"))
 LLM_MODEL = _require("LLM_MODEL")
+# Model du phong khi model chinh het quota (vd free tier: moi model co han muc ngay rieng)
+LLM_FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL") or None
 
 # Agent Loop co the dung endpoint rieng (fallback ve OpenAI)
 AGENT_BASE_URL = os.getenv("AGENT_LOOP_BASE_URL") or OPENAI_BASE_URL

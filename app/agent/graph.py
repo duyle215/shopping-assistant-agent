@@ -250,8 +250,16 @@ def tools(state: State, config) -> dict:
                 ensure_ascii=False,
             )
         elif name == "place_order" and not state.get("order_decisions", {}).get(call["id"], {}).get("approved"):
+            decided = call["id"] in state.get("order_decisions", {})
             result = json.dumps(
-                {"status": "cancelled", "message": "Khach chua xac nhan nen don hang KHONG duoc tao."},
+                {
+                    "status": "cancelled",
+                    "message": (
+                        "Khach da bam HUY tren the xac nhan nen don hang KHONG duoc tao."
+                        if decided
+                        else "Khach chua xac nhan nen don hang KHONG duoc tao."
+                    ),
+                },
                 ensure_ascii=False,
             )
         else:
@@ -320,7 +328,7 @@ def check(state: State, config) -> dict:
 
     output = check_output(answer)
     if not output.passed:
-        logger.warning(f"[Guardrail] Output blocked: {output.reason}")
+        logger.warning(f"[Guardrail] Output blocked: {output.reason} | {answer[:300]!r}")
         answer = "Xin lỗi, đã xảy ra lỗi khi xử lý câu trả lời. Bạn vui lòng hỏi lại nhé."
 
     return {

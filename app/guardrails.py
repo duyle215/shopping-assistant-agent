@@ -107,7 +107,7 @@ def check_output(response: str) -> GuardrailResult:
         if re.search(pattern, response, re.IGNORECASE):
             return GuardrailResult(
                 passed=False,
-                reason="Cau tra loi co the chua thong tin noi bo he thong.",
+                reason=f"Cau tra loi co the chua thong tin noi bo he thong (mau: {pattern}).",
             )
 
     return GuardrailResult(passed=True)

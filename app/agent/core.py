@@ -17,6 +17,7 @@ from typing import Iterator, Optional
 from langgraph.types import Command
 
 from app.agent.graph import build_graph, new_turn_input, tools_called
+from app.agent.llm import QuotaExhausted
 from app.agent.schemas import AgentResponse
 
 logging.basicConfig(
@@ -24,6 +25,8 @@ logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
 logger = logging.getLogger("agent")
+
+BUSY_MESSAGE = "Hệ thống đang quá tải, bạn vui lòng thử lại sau ít phút nhé."
 
 
 def _postgres_checkpointer():
@@ -96,29 +99,54 @@ class ShoppingAgent:
             self.graph.invoke(Command(resume={"approved": False}), self._config(session_id))
 
     # ------------------------------------------------------------------
+    def _busy(self, session_id: str, exc: Exception) -> AgentResponse:
+        logger.error(f"[Agent] LLM khong dung duoc: {exc}")
+        return AgentResponse(
+            intent="error",
+            answer_markdown=BUSY_MESSAGE,
+            tools_called=[],
+            warning=str(exc),
+            session_id=session_id,
+        )
+
     def run(self, user_message: str, session_id: Optional[str] = None) -> AgentResponse:
         session_id = session_id or self.new_session_id()
-        self._cancel_pending(session_id)
-        self.graph.invoke(new_turn_input(user_message), self._config(session_id))
+        try:
+            self._cancel_pending(session_id)
+            self.graph.invoke(new_turn_input(user_message), self._config(session_id))
+        except QuotaExhausted as exc:
+            return self._busy(session_id, exc)
         return self._response(session_id)
 
     def confirm(self, session_id: str, approved: bool) -> AgentResponse:
         if not self.pending_confirmation(session_id):
             return self._response(session_id)
-        self.graph.invoke(Command(resume={"approved": approved}), self._config(session_id))
+        try:
+            self.graph.invoke(Command(resume={"approved": approved}), self._config(session_id))
+        except QuotaExhausted as exc:
+            return self._busy(session_id, exc)
         return self._response(session_id)
 
     # ------------------------------------------------------------------
     def _stream(self, graph_input, session_id: str) -> Iterator[dict]:
-        for chunk in self.graph.stream(
-            graph_input, self._config(session_id), stream_mode="custom"
-        ):
-            yield chunk
+        try:
+            for chunk in self.graph.stream(
+                graph_input, self._config(session_id), stream_mode="custom"
+            ):
+                yield chunk
+        except QuotaExhausted as exc:
+            yield {"type": "reset"}
+            yield {"type": "final", **self._busy(session_id, exc).model_dump()}
+            return
         yield {"type": "final", **self._response(session_id).model_dump()}
 
     def stream(self, user_message: str, session_id: Optional[str] = None) -> Iterator[dict]:
         session_id = session_id or self.new_session_id()
-        self._cancel_pending(session_id)
+        try:
+            self._cancel_pending(session_id)
+        except QuotaExhausted as exc:
+            yield {"type": "final", **self._busy(session_id, exc).model_dump()}
+            return
         yield from self._stream(new_turn_input(user_message), session_id)
 
     def stream_confirm(self, session_id: str, approved: bool) -> Iterator[dict]:

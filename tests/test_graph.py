@@ -228,3 +228,24 @@ def test_order_without_contact_asks_for_it_instead_of_confirming(agent, fake_too
     assert fake_tools == []
     tool_msg = [m for m in script.calls[-1] if m["role"] == "tool"][-1]
     assert json.loads(tool_msg["content"])["status"] == "need_customer_info"
+
+
+def test_quota_exhausted_gives_friendly_answer_and_next_turn_works(agent, monkeypatch):
+    from app.agent.core import BUSY_MESSAGE
+
+    calls = {"n": 0}
+
+    def flaky(messages, tools=None, on_token=None, **_):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise llm.QuotaExhausted("model-a", 2400)
+        return llm.LLMResult(message={"role": "assistant", "content": "Chào anh!"}, latency_ms=1)
+
+    monkeypatch.setattr(llm, "chat", flaky)
+
+    busy = agent.run("Xin chào", "s11")
+    assert busy.answer_markdown == BUSY_MESSAGE
+    assert busy.intent == "error"
+
+    ok = agent.run("Xin chào lần nữa", "s11")
+    assert ok.answer_markdown == "Chào anh!"
