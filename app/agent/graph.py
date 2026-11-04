@@ -341,7 +341,8 @@ def check(state: State, config) -> dict:
         warnings.append(f"Cau tra loi noi da {', '.join(claims)} nhung khong goi tool")
 
     if "compare_products" in called:
-        bad = unsupported_numbers(answer, _tool_outputs(state["turn"]))
+        # So khach tu noi (vd "Nokia 3310") khong phai so bia
+        bad = unsupported_numbers(answer, [state["turn"][0]["content"], *_tool_outputs(state["turn"])])
         if bad:
             if "numbers" not in retried:
                 return _retry(

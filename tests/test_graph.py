@@ -154,6 +154,22 @@ def test_unsupported_number_triggers_one_rewrite(agent, fake_tools, monkeypatch)
     assert reply.warning is None
 
 
+def test_numbers_from_the_customer_message_are_not_flagged(agent, fake_tools, monkeypatch):
+    """"So sanh iPhone 15 voi Nokia 3310": nhac lai "3310" khong phai so bia."""
+    script = ScriptedLLM(
+        [
+            {"role": "assistant", "content": None, "tool_calls": [_call("compare_products", {"product_ids": [1, 2]}, "k1")]},
+            {"role": "assistant", "content": "Cửa hàng chưa có Nokia 3310. | Pin | **5000 mAh** ✓ | 4000 mAh |"},
+        ]
+    )
+    monkeypatch.setattr(llm, "chat", script)
+
+    reply = agent.run("So sánh iPhone 15 với Nokia 3310", "s-nokia")
+
+    assert len(script.calls) == 2  # khong bi yeu cau viet lai
+    assert reply.warning is None
+
+
 def test_claimed_support_without_tool_triggers_rewrite(agent, fake_tools, monkeypatch):
     script = ScriptedLLM(
         [
