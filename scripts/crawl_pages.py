@@ -17,7 +17,7 @@ Chay:
 
 Sau do:
     python scripts/extract_catalog.py --pages data/crawled --out data/catalog_crawled.jsonl --max-pages 50
-    python scripts/ingest_data.py --catalog data/catalog.jsonl data/catalog_crawled.jsonl
+    python scripts/sync_odoo.py --catalog data/catalog.jsonl data/catalog_crawled.jsonl
 """
 
 from __future__ import annotations

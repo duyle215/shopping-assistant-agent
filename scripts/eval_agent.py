@@ -5,8 +5,11 @@ Kiem tra bang luat (tool phai goi, tham so, agent, noi dung cau tra loi, thay do
 gia trong cau tra loi phai co trong catalog) va, neu bat --judge, them LLM lam giam khao
 (cau tra loi co bia thong tin ngoai du lieu tool tra ve khong).
 
-Chay tren database rieng (mac dinh shopping_assistant_eval), nap lai catalog vao Postgres,
-dung chung Qdrant voi app (tat run.py truoc neu dung Qdrant local).
+Backend la Odoo: chay tren database Odoo rieng (mac dinh odoo_eval, tao bang
+`docker compose run --rm odoo-setup odoo_eval`, Odoo chay voi ODOO_DB_FILTER=^odoo).
+Truoc moi kich ban: huy don cua chatbot va dat lai ton kho theo data/stock.json, qua API Odoo.
+Kiem tra DB: don ban (sale.order), yeu cau ho tro (crm.lead) cua phien chat do, ton kho con ban.
+Vector nam o collection Qdrant rieng (product_knowledge_eval). Traces o Postgres shopping_assistant_eval.
 
     python scripts/eval_agent.py                       # tat ca kich ban
     python scripts/eval_agent.py --category order      # mot nhom
@@ -37,8 +40,14 @@ load_dotenv(os.path.join(ROOT, ".env"))
 # ------------------------------------------------------------------
 # SETUP DATABASE RIENG CHO EVAL
 # ------------------------------------------------------------------
-def setup_database(db_name: str) -> None:
+def setup_database(db_name: str, odoo_db: str) -> None:
     os.environ["POSTGRES_DB"] = db_name
+    os.environ["ODOO_DB"] = odoo_db
+    os.environ.setdefault("QDRANT_COLLECTION_EVAL", "product_knowledge_eval")
+    os.environ["QDRANT_COLLECTION"] = os.environ["QDRANT_COLLECTION_EVAL"]
+    # Key trong .env la cua database demo; key cua odoo_eval doc tu odoo/secrets/odoo_eval.json
+    os.environ.pop("ODOO_API_KEY", None)
+    os.environ.pop("ODOO_ADMIN_API_KEY", None)
     import psycopg2
 
     conn = psycopg2.connect(
@@ -56,23 +65,61 @@ def setup_database(db_name: str) -> None:
     conn.close()
 
 
-def load_catalog_into_db() -> dict[int, dict]:
-    from ingest_data import ingest_postgres, load_catalog
+def load_catalog_into_odoo(reindex: bool) -> dict[int, dict]:
+    """Dong bo catalog vao Odoo eval (+ Qdrant neu chua co). Tra ve {catalog_id: san pham + odoo_id}."""
+    from sync_odoo import ingest_qdrant, load_catalog, sync_products
+
+    from app.config import QDRANT_COLLECTION
+    from app.db import get_qdrant
+    from app.odoo import get_odoo
 
     products = load_catalog([os.path.join(ROOT, "data/catalog.jsonl")], os.path.join(ROOT, "data/stock.json"))
-    ingest_postgres(products)
-    return {p["id"]: p for p in products}
+    ids = sync_products(get_odoo(admin=True), products)
+    if reindex or not get_qdrant().collection_exists(QDRANT_COLLECTION):
+        print(f"  Qdrant: {ingest_qdrant(products, ids)} vector -> {QDRANT_COLLECTION}")
+    return {p["catalog_id"]: {**p, "odoo_id": ids[p["catalog_id"]]} for p in products}
 
 
 def reset_state(catalog: dict[int, dict]) -> None:
-    from sqlalchemy import text
+    """Huy don cua chatbot (tra lai hang da giu) roi dat lai ton kho nhung may bi lech."""
+    from app.odoo import get_odoo
 
-    from app.db import get_engine
+    odoo = get_odoo(admin=True)
+    orders = odoo.search("sale.order", [("chat_session_id", "!=", False), ("state", "!=", "cancel")])
+    if orders:
+        odoo.call("sale.order", "action_cancel", ids=orders)
+    current = {
+        r["id"]: r["chat_free_qty"]
+        for r in odoo.search_read(
+            "product.template", [("id", "in", [p["odoo_id"] for p in catalog.values()])], ["chat_free_qty"]
+        )
+    }
+    levels = {p["odoo_id"]: p["stock"] for p in catalog.values() if current.get(p["odoo_id"]) != p["stock"]}
+    if levels:
+        from sync_odoo import set_stock
 
-    with get_engine().begin() as conn:
-        conn.execute(text("TRUNCATE orders, support_requests RESTART IDENTITY"))
-        for pid, p in catalog.items():
-            conn.execute(text("UPDATE products SET stock = :s WHERE id = :id"), {"s": p["stock"], "id": pid})
+        set_stock(odoo, levels, quiet=True)
+
+
+def translate_ids(scenarios: list[dict], catalog: dict[int, dict]) -> None:
+    """Kich ban ghi product_id theo catalog (1..30); doi sang id product.template trong Odoo."""
+    to_odoo = {cid: p["odoo_id"] for cid, p in catalog.items()}
+
+    def conv(rule):
+        if isinstance(rule, int):
+            return to_odoo.get(rule, rule)
+        if isinstance(rule, list):
+            return [conv(r) for r in rule]
+        if isinstance(rule, dict):
+            return {k: conv(v) for k, v in rule.items()}
+        return rule
+
+    for sc in scenarios:
+        for turn in sc["turns"]:
+            for rules in (turn.get("args") or {}).values():
+                for key in ("product_id", "product_ids"):
+                    if key in rules:
+                        rules[key] = conv(rules[key])
 
 
 # ------------------------------------------------------------------
@@ -120,16 +167,24 @@ def allowed_prices(catalog: dict[int, dict]) -> set[int]:
     return allowed
 
 
-def db_snapshot() -> dict:
-    from sqlalchemy import text
+def db_snapshot(session_id: str, catalog: dict[int, dict]) -> dict:
+    """Trang thai Odoo sau kich ban: don va yeu cau ho tro cua phien nay, ton kho theo id catalog."""
+    from app.odoo import get_odoo
 
-    from app.db import get_engine
-
-    with get_engine().connect() as conn:
-        orders = conn.execute(text("SELECT status FROM orders")).scalars().all()
-        support = conn.execute(text("SELECT count(*) FROM support_requests")).scalar_one()
-        stock = dict(conn.execute(text("SELECT id, stock FROM products")).fetchall())
-    return {"orders": orders, "support_requests": support, "stock": stock}
+    odoo = get_odoo(admin=True)
+    orders = odoo.search_read("sale.order", [("chat_session_id", "=", session_id)], ["state", "chat_shortage"])
+    status = {"sale": "confirmed", "draft": "pending_restock"}
+    support = len(odoo.search("crm.lead", [("chat_session_id", "=", session_id)]))
+    by_odoo = {p["odoo_id"]: cid for cid, p in catalog.items()}
+    stock = {
+        by_odoo[r["id"]]: r["chat_free_qty"]
+        for r in odoo.search_read("product.template", [("id", "in", list(by_odoo))], ["chat_free_qty"])
+    }
+    return {
+        "orders": [status.get(o["state"], o["state"]) for o in orders],
+        "support_requests": support,
+        "stock": stock,
+    }
 
 
 def turn_tool_calls(agent, session_id: str) -> tuple[list[tuple[str, dict]], list[str]]:
@@ -264,7 +319,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scenarios", default=os.path.join(ROOT, "evals/scenarios.yaml"))
     parser.add_argument("--report", default=os.path.join(ROOT, "docs/agent_eval.md"))
-    parser.add_argument("--db", default="shopping_assistant_eval")
+    parser.add_argument("--db", default="shopping_assistant_eval", help="Postgres cua agent (traces)")
+    parser.add_argument("--odoo-db", default="odoo_eval", help="Database Odoo cho eval")
+    parser.add_argument("--reindex", action="store_true", help="Tao lai vector Qdrant cho eval")
     parser.add_argument("--only", nargs="*")
     parser.add_argument("--category")
     parser.add_argument("--judge", action="store_true", help="LLM giam khao cho luot cuoi moi kich ban")
@@ -277,7 +334,7 @@ def main() -> None:
     parser.add_argument("--sleep", type=float, default=4.0, help="Nghi giua cac kich ban (giay)")
     args = parser.parse_args()
 
-    setup_database(args.db)
+    setup_database(args.db, args.odoo_db)
 
     import yaml
     from langgraph.checkpoint.memory import MemorySaver
@@ -295,7 +352,8 @@ def main() -> None:
     if args.category:
         scenarios = [s for s in scenarios if s["category"] == args.category]
 
-    catalog = load_catalog_into_db()
+    catalog = load_catalog_into_odoo(args.reindex)
+    translate_ids(scenarios, catalog)
     create_tables(get_engine())
     allowed = allowed_prices(catalog)
     agent = ShoppingAgent(checkpointer=MemorySaver())
@@ -305,7 +363,7 @@ def main() -> None:
     results = []
     consecutive_errors = 0
     started = time.time()
-    print(f"Chay {len(scenarios)} kich ban voi {LLM_MODEL} (DB: {args.db})\n")
+    print(f"Chay {len(scenarios)} kich ban voi {LLM_MODEL} (Odoo: {args.odoo_db}, traces: {args.db})\n")
 
     for sc in scenarios:
         for attempt in (1, 2):
@@ -323,7 +381,7 @@ def main() -> None:
                     answers.append(resp.answer_markdown or "")
                     calls, outputs = turn_tool_calls(agent, session)
                     fails += [f"turn {i}: {f}" for f in check_turn(turn, resp, calls, had_pending, allowed)]
-                fails += [f"db: {f}" for f in check_db(sc.get("db") or {}, db_snapshot())]
+                fails += [f"db: {f}" for f in check_db(sc.get("db") or {}, db_snapshot(session, catalog))]
                 if args.judge and resp.intent != "blocked" and not resp.pending_confirmation:
                     verdict = judge(sc["turns"][-1]["user"], outputs, resp.answer_markdown, judge_model)
                 consecutive_errors = 0
@@ -398,7 +456,7 @@ def current_commit() -> str:
             ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True
         ).stdout.strip()
         dirty = subprocess.run(
-            ["git", "status", "--porcelain", "--", "app"], cwd=ROOT, capture_output=True, text=True
+            ["git", "status", "--porcelain", "--", "app", "odoo/addons"], cwd=ROOT, capture_output=True, text=True
         ).stdout.strip()
         return commit + ("+dirty" if dirty else "")
     except Exception:
@@ -424,7 +482,7 @@ def write_report(results: list[dict], args, model: str, seconds: float, rerun: l
     lines = [
         "# Agent evaluation",
         "",
-        f"Code: `{commit}` · Model: `{model}` · Scenarios: {n} · Turns: {turns} · "
+        f"Code: `{commit}` · Backend: Odoo 19 · Model: `{model}` · Scenarios: {n} · Turns: {turns} · "
         f"Run: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
         + ("" if rerun else f" ({seconds / 60:.0f} min)"),
         "",

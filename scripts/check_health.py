@@ -1,5 +1,5 @@
 """
-Health Check - Kiem tra ket noi toi cac thanh phan: PostgreSQL, Qdrant.
+Health Check - Kiem tra ket noi toi cac thanh phan: PostgreSQL (agent), Qdrant, Odoo.
 
 Chay:  python scripts/check_health.py  (tu thu muc goc project)
 """
@@ -82,6 +82,25 @@ def check_qdrant():
 
 
 # ------------------------------------------------------------------
+# 3. ODOO
+# ------------------------------------------------------------------
+def check_odoo():
+    from app.odoo import OdooError, get_odoo
+
+    try:
+        odoo = get_odoo()
+        ctx = odoo.call("res.users", "context_get")
+        phones = len(odoo.search("product.template", [("is_phone", "=", True)]))
+        print(f"Odoo:     OK  ({odoo.url}, database '{odoo.db}', user #{ctx['uid']}, {phones} dien thoai)")
+        if not phones:
+            print("  Chua co san pham. Chay:  python scripts/sync_odoo.py")
+        return True
+    except OdooError as e:
+        print(f"Odoo:     FAIL  ->  {e}")
+        return False
+
+
+# ------------------------------------------------------------------
 # MAIN
 # ------------------------------------------------------------------
 def main():
@@ -92,6 +111,7 @@ def main():
     results = {
         "Postgres": check_postgres(),
         "Qdrant": check_qdrant(),
+        "Odoo": check_odoo(),
     }
 
     print()

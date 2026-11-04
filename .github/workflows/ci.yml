@@ -12,71 +12,59 @@ on:
         type: boolean
         default: false
 
+env:
+  COMPOSE_FILE: docker-compose.yml:docker-compose.dev.yml
+  POSTGRES_HOST: localhost
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  ODOO_DB_PASSWORD: odoo
+  ODOO_URL: http://localhost:8069
+  # The test and evaluation databases sit next to the shop database
+  ODOO_DB_FILTER: ^odoo
+
 jobs:
   tests:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-retries 10
-    env:
-      POSTGRES_HOST: localhost
-      POSTGRES_PORT: "5432"
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
+      - run: touch .env
+      - run: docker compose up -d --wait postgres
+      - run: docker compose run --rm odoo-setup odoo_test
+      - run: docker compose up -d odoo
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: pip
       - run: pip install -r requirements-dev.txt
+      - run: timeout 120 bash -c 'until curl -sf localhost:8069/web/health; do sleep 2; done'
       - run: pytest -q
 
   agent-eval:
     if: github.event_name == 'workflow_dispatch' && inputs.run_agent_eval
     needs: tests
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-retries 10
     env:
-      POSTGRES_HOST: localhost
-      POSTGRES_PORT: "5432"
       POSTGRES_DB: shopping_assistant
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
       OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/' }}
       OPENAI_API_KEY: ${{ secrets.LLM_API_KEY }}
       LLM_MODEL: ${{ vars.LLM_MODEL || 'gemini-3.5-flash-lite' }}
       EMBED_MODEL: ${{ vars.EMBED_MODEL || 'gemini-embedding-001' }}
       EMBED_DIM: ${{ vars.EMBED_DIM || '3072' }}
-      QDRANT_PATH: ./qdrant_data
+      QDRANT_URL: http://localhost:6333
       QDRANT_COLLECTION: product_knowledge
     steps:
       - uses: actions/checkout@v4
+      - run: touch .env
+      - run: docker compose up -d --wait postgres qdrant
+      - run: docker compose run --rm odoo-setup odoo_eval
+      - run: docker compose up -d odoo
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: pip
       - run: pip install -r requirements.txt
-      - run: psql -h localhost -U postgres -c "CREATE DATABASE shopping_assistant"
-        env:
-          PGPASSWORD: postgres
-      - run: python scripts/ingest_data.py
+      - run: timeout 120 bash -c 'until curl -sf localhost:8069/web/health; do sleep 2; done'
       - run: python scripts/eval_agent.py --judge
       - uses: actions/upload-artifact@v4
         with:

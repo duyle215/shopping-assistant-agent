@@ -149,7 +149,7 @@ def sync_products(odoo, products: list[dict]) -> dict[int, int]:
     return ids
 
 
-def set_stock(odoo, levels: dict[int, int]) -> None:
+def set_stock(odoo, levels: dict[int, int], quiet: bool = False) -> None:
     """Dat so luong ton kho (product.template id -> so luong) o kho chinh, nhu mot lan kiem kho."""
     location = odoo.search_read("stock.warehouse", [], ["lot_stock_id"], limit=1)[0]["lot_stock_id"][0]
     variants = odoo.search_read(
@@ -169,7 +169,8 @@ def set_stock(odoo, levels: dict[int, int]) -> None:
             )
         )
     odoo.call("stock.quant", "action_apply_inventory", ids=quant_ids, context={"inventory_mode": True})
-    print(f"  Odoo: da dat ton kho cho {len(quant_ids)} san pham")
+    if not quiet:
+        print(f"  Odoo: da dat ton kho cho {len(quant_ids)} san pham")
 
 
 def ingest_qdrant(products: list[dict], ids: dict[int, int]) -> int:

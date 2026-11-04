@@ -4,7 +4,10 @@ Eval Search - so sanh tim theo nghia (dense), tu khoa (keyword) va hybrid (RRF).
 Doc evals/search_queries.yaml (truy van + product_id dung), moi truy van embed mot lan,
 roi do Hit@1, Hit@3 va MRR cho tung che do. Ghi docs/search_eval.md.
 
-Chay:  python scripts/eval_search.py   (can da chay ingest_data.py)
+product_id trong file truy van la id catalog (1..30); ket qua tim kiem (id product.template
+trong Odoo) duoc doi lai qua ma noi bo PHONE-<id>.
+
+Chay:  python scripts/eval_search.py   (can da chay scripts/sync_odoo.py)
 """
 
 from __future__ import annotations
@@ -56,14 +59,23 @@ def main() -> None:
         with open(CACHE, encoding="utf-8") as f:
             cache = json.load(f)
 
+    from app.odoo import get_odoo
+
+    to_catalog = {
+        r["id"]: int(r["default_code"].split("-")[1])
+        for r in get_odoo().search_read(
+            "product.template", [("default_code", "=like", "PHONE-%")], ["id", "default_code"]
+        )
+    }
+
     results: dict[str, dict[str, list[int | None]]] = {}
     misses: list[str] = []
     for group, items in groups.items():
         results[group] = {m: [] for m in MODES}
         for item in items:
             q, expected = item["query"], item["expected"]
-            dense = dense_ids(embed_cached(q, cache), 10)
-            keyword = keyword_ids(q, 10)
+            dense = [to_catalog.get(i, -i) for i in dense_ids(embed_cached(q, cache), 10)]
+            keyword = [to_catalog.get(i, -i) for i in keyword_ids(q, 10)]
             hybrid = [pid for pid, _ in rrf([dense, keyword])]
             for mode, ranking in zip(MODES, (dense, keyword, hybrid)):
                 r = rank_of(ranking, expected)
