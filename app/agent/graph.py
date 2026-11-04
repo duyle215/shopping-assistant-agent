@@ -28,7 +28,7 @@ from langgraph.types import interrupt
 
 from app import tracing
 from app.agent import llm
-from app.agent.prompts import HANDOFF_MAP, build_agent_configs
+from app.agent.prompts import HANDOFF_MAP, LANGUAGE_NOTES, build_agent_configs
 from app.agent.tools import TOOL_DEFS, TOOL_DISPATCH
 from app.config import GUARD_MODEL, MAX_ITERATIONS
 from app.guardrails import check_input, check_input_llm, check_output, unbacked_action_claims
@@ -63,6 +63,7 @@ class State(TypedDict, total=False):
     transcript: Annotated[list[dict], _transcript_reducer]  # cac luot truoc: user + cau tra loi
     turn: Annotated[list[dict], _turn_reducer]  # luot hien tai: user, assistant, tool, ghi chu
     agent: str  # "sales" | "compare"
+    lang: str  # "vi" | "en" - ngon ngu khach chon tren giao dien
     turn_id: str
     started_at: float
     retried: Annotated[list[str], add]
@@ -72,9 +73,26 @@ class State(TypedDict, total=False):
     warning: Optional[str]
 
 
-def new_turn_input(message: str) -> dict:
+LANGS = ("vi", "en")
+
+BLOCKED_MESSAGE = {
+    "vi": "Phát hiện nội dung không hợp lệ. Bạn vui lòng nhập câu hỏi bình thường nhé.",
+    "en": "This message looks like an attempt to change my instructions. Please ask a normal question.",
+}
+OUTPUT_BLOCKED_MESSAGE = {
+    "vi": "Xin lỗi, đã xảy ra lỗi khi xử lý câu trả lời. Bạn vui lòng hỏi lại nhé.",
+    "en": "Sorry, something went wrong while preparing the answer. Please ask again.",
+}
+TOO_MANY_ROUNDS_MESSAGE = {
+    "vi": "Xin lỗi, mình chưa xử lý được yêu cầu này. Bạn thử hỏi đơn giản hơn nhé.",
+    "en": "Sorry, I couldn't finish this request. Please try a simpler question.",
+}
+
+
+def new_turn_input(message: str, lang: str = "vi") -> dict:
     """Input cho mot luot moi."""
     return {
+        "lang": lang if lang in LANGS else "vi",
         "turn": {"replace": [{"role": "user", "content": message}]},
         "turn_id": uuid.uuid4().hex[:12],
         "started_at": time.time(),
@@ -122,7 +140,12 @@ def _last_tool_calls(turn: list[dict]) -> list[dict]:
 
 def _llm_messages(state: State) -> list[dict]:
     cfg = AGENT_CONFIGS[state.get("agent") or "sales"]
-    return [{"role": "system", "content": cfg.system_prompt}, *state.get("transcript", []), *state["turn"]]
+    system = cfg.system_prompt + LANGUAGE_NOTES[_lang(state)]
+    return [{"role": "system", "content": system}, *state.get("transcript", []), *state["turn"]]
+
+
+def _lang(state: State) -> str:
+    return state.get("lang") if state.get("lang") in LANGS else "vi"
 
 
 # ------------------------------------------------------------------
@@ -136,7 +159,7 @@ def start(state: State, config) -> dict:
     if result.passed:
         return {"agent": state.get("agent") or "sales"}
     logger.warning(f"[Guardrail] Input blocked: {result.reason}")
-    return {"answer": result.reason, "intent": "blocked", "warning": result.reason}
+    return {"answer": BLOCKED_MESSAGE[_lang(state)], "intent": "blocked", "warning": result.reason}
 
 
 def agent(state: State, config) -> dict:
@@ -265,6 +288,8 @@ def tools(state: State, config) -> dict:
         else:
             if name in SESSION_TOOLS:
                 args["session_id"] = session_id
+            if name == "compare_products":
+                args["lang"] = _lang(state)  # nhan bang so sanh theo ngon ngu khach
             fn = TOOL_DISPATCH.get(name)
             try:
                 result = fn(args) if fn else json.dumps({"error": f"Tool '{name}' khong ton tai"})
@@ -329,7 +354,7 @@ def check(state: State, config) -> dict:
     output = check_output(answer)
     if not output.passed:
         logger.warning(f"[Guardrail] Output blocked: {output.reason} | {answer[:300]!r}")
-        answer = "Xin lỗi, đã xảy ra lỗi khi xử lý câu trả lời. Bạn vui lòng hỏi lại nhé."
+        answer = OUTPUT_BLOCKED_MESSAGE[_lang(state)]
 
     return {
         "answer": answer,
@@ -345,7 +370,7 @@ def route_after_check(state: State) -> str:
 def too_many_rounds(state: State, config) -> dict:
     logger.warning(f"[Agent] Dat gioi han {MAX_ITERATIONS} vong")
     return {
-        "answer": "Xin lỗi, mình chưa xử lý được yêu cầu này. Bạn thử hỏi đơn giản hơn nhé.",
+        "answer": TOO_MANY_ROUNDS_MESSAGE[_lang(state)],
         "intent": "error",
         "warning": f"Dat gioi han {MAX_ITERATIONS} vong",
     }

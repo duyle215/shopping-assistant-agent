@@ -26,7 +26,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger("agent")
 
-BUSY_MESSAGE = "Hệ thống đang quá tải, bạn vui lòng thử lại sau ít phút nhé."
+BUSY_MESSAGES = {
+    "vi": "Hệ thống đang quá tải, bạn vui lòng thử lại sau ít phút nhé.",
+    "en": "The system is busy right now. Please try again in a few minutes.",
+}
+BUSY_MESSAGE = BUSY_MESSAGES["vi"]
+CONFIRM_MESSAGES = {
+    "vi": "Vui lòng xác nhận đơn hàng trước khi mình đặt.",
+    "en": "Please confirm the order before I place it.",
+}
 
 
 def _postgres_checkpointer():
@@ -79,7 +87,7 @@ class ShoppingAgent:
         if pending:
             return AgentResponse(
                 intent="confirm_order",
-                answer_markdown="Vui lòng xác nhận đơn hàng trước khi mình đặt.",
+                answer_markdown=CONFIRM_MESSAGES.get(values.get("lang"), CONFIRM_MESSAGES["vi"]),
                 tools_called=tools_called(values.get("turn", [])),
                 session_id=session_id,
                 pending_confirmation=pending,
@@ -99,23 +107,27 @@ class ShoppingAgent:
             self.graph.invoke(Command(resume={"approved": False}), self._config(session_id))
 
     # ------------------------------------------------------------------
-    def _busy(self, session_id: str, exc: Exception) -> AgentResponse:
+    def _lang_of(self, session_id: str) -> str:
+        return self.graph.get_state(self._config(session_id)).values.get("lang") or "vi"
+
+    def _busy(self, session_id: str, exc: Exception, lang: Optional[str] = None) -> AgentResponse:
         logger.error(f"[Agent] LLM khong dung duoc: {exc}")
+        lang = lang or self._lang_of(session_id)
         return AgentResponse(
             intent="error",
-            answer_markdown=BUSY_MESSAGE,
+            answer_markdown=BUSY_MESSAGES.get(lang, BUSY_MESSAGE),
             tools_called=[],
             warning=str(exc),
             session_id=session_id,
         )
 
-    def run(self, user_message: str, session_id: Optional[str] = None) -> AgentResponse:
+    def run(self, user_message: str, session_id: Optional[str] = None, lang: str = "vi") -> AgentResponse:
         session_id = session_id or self.new_session_id()
         try:
             self._cancel_pending(session_id)
-            self.graph.invoke(new_turn_input(user_message), self._config(session_id))
+            self.graph.invoke(new_turn_input(user_message, lang), self._config(session_id))
         except QuotaExhausted as exc:
-            return self._busy(session_id, exc)
+            return self._busy(session_id, exc, lang)
         return self._response(session_id)
 
     def confirm(self, session_id: str, approved: bool) -> AgentResponse:
@@ -140,14 +152,14 @@ class ShoppingAgent:
             return
         yield {"type": "final", **self._response(session_id).model_dump()}
 
-    def stream(self, user_message: str, session_id: Optional[str] = None) -> Iterator[dict]:
+    def stream(self, user_message: str, session_id: Optional[str] = None, lang: str = "vi") -> Iterator[dict]:
         session_id = session_id or self.new_session_id()
         try:
             self._cancel_pending(session_id)
         except QuotaExhausted as exc:
-            yield {"type": "final", **self._busy(session_id, exc).model_dump()}
+            yield {"type": "final", **self._busy(session_id, exc, lang).model_dump()}
             return
-        yield from self._stream(new_turn_input(user_message), session_id)
+        yield from self._stream(new_turn_input(user_message, lang), session_id)
 
     def stream_confirm(self, session_id: str, approved: bool) -> Iterator[dict]:
         if not self.pending_confirmation(session_id):

@@ -63,3 +63,10 @@ def test_llm_guard_is_off_without_model():
 def test_forwarding_to_staff_without_tool_is_flagged():
     answer = "Tôi xin phép chuyển yêu cầu này đến bộ phận chăm sóc khách hàng để nhân viên liên hệ."
     assert unbacked_action_claims(answer, []) == ["request_human_support"]
+
+
+def test_english_claims_are_checked_too():
+    assert unbacked_action_claims("Your order has been placed! Thanks.", []) == ["place_order"]
+    assert unbacked_action_claims("Our staff will contact you shortly.", []) == ["request_human_support"]
+    assert unbacked_action_claims("I've forwarded your question to our support team.", []) == ["request_human_support"]
+    assert unbacked_action_claims("The Galaxy A55 costs 9,490,000 ₫. Would you like to order it?", []) == []

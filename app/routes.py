@@ -43,6 +43,11 @@ def products_page():
 # ------------------------------------------------------------------
 # API ENDPOINTS
 # ------------------------------------------------------------------
+def _lang(data: dict) -> str:
+    """Ngon ngu tra loi: 'vi' (mac dinh) hoac 'en'."""
+    return "en" if str(data.get("lang", "")).lower().startswith("en") else "vi"
+
+
 @api.post("/api/chat")
 def api_chat():
     """Mot luot chat, tra JSON. Neu can xac nhan don hang: pending_confirmation != null."""
@@ -53,7 +58,7 @@ def api_chat():
         return jsonify({"error": "Tin nhan trong."}), 400
 
     try:
-        result = _get_agent().run(message, session_id=session_id)
+        result = _get_agent().run(message, session_id=session_id, lang=_lang(data))
         return jsonify(result.model_dump())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -98,7 +103,7 @@ def api_chat_stream():
     if not message:
         return jsonify({"error": "Tin nhan trong."}), 400
     session_id = data.get("session_id") or _get_agent().new_session_id()
-    return _sse(_get_agent().stream(message, session_id=session_id))
+    return _sse(_get_agent().stream(message, session_id=session_id, lang=_lang(data)))
 
 
 @api.post("/api/chat/confirm/stream")

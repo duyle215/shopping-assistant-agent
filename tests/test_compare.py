@@ -80,3 +80,15 @@ def test_unsupported_numbers_flags_invented_numbers():
     table = "| Pin | 5000 mAh | 4610 mAh |"
     answer = "Pin 5000 mAh, hơn máy kia 390 mAh, sạc 120W."
     assert unsupported_numbers(answer, [table]) == ["120", "390"]
+
+
+def test_english_table_labels():
+    result = build_comparison([_phone(1, "A", battery_mah=6000), _phone(2, "B")], lang="en")
+    assert result["table_markdown"].startswith("| Spec | A | B |")
+    assert "| Battery | **6000 mAh** ✓ | 5000 mAh |" in result["table_markdown"]
+    assert "Battery" in result["wins"]["A"]
+
+
+def test_million_written_in_english_counts_as_the_price():
+    table = "| Price | 22.990.000 ₫ |"
+    assert unsupported_numbers("It costs 22.99 million VND.", [table]) == []

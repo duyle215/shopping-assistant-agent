@@ -124,11 +124,16 @@ ACTION_CLAIMS: dict[str, list[str]] = {
         r"(k[ếe]t n[ốo]i|chuy[ểe]n)[^.\n]{0,40}nh[âa]n vi[êe]n",
         r"(đ[ãa]|da) (g[ửu]i|t[ạa]o|ghi nh[ậa]n) y[êe]u c[ầa]u h[ỗo] tr[ợo]",
         r"(chuy[ểe]n|g[ửu]i)\s+(y[êe]u c[ầa]u|th[ôo]ng tin)[^.\n]{0,80}(b[ộo] ph[ậa]n|nh[âa]n vi[êe]n)",
+        r"(staff|team|colleague|representative)[^.\n]{0,40}will (contact|call|reach|get back|get in touch)",
+        r"(forwarded|passed|escalated)[^.\n]{0,60}(staff|team|support)",
+        r"(support )?(request|ticket) (has been|was|is) (created|opened|sent|submitted)",
     ],
     "place_order": [
         r"(đ[ãa]|da) (đ[ặa]t|ghi nh[ậa]n)[^.\n]{0,40}(đ[ơo]n|th[àa]nh c[ôo]ng)",
         r"đ[ặa]t h[àa]ng th[àa]nh c[ôo]ng",
         r"đ[ơo]n h[àa]ng[^.\n]{0,30}(đ[ãa] )?(đư[ợo]c )?(ghi nh[ậa]n|x[áa]c nh[ậa]n)",
+        r"order[^.\n]{0,30}(has been|was|is now|is) (placed|confirmed|created|successful)",
+        r"(placed|confirmed) (the|your) order",
     ],
 }
 

@@ -24,7 +24,7 @@ SALES_SYSTEM = (
     "(thiet ke, chat lieu, 'choi game muot'...). Can them thong tin -> goi get_product_details.\n"
     "3. Neu tool tra ve khong co san pham -> noi thang: cua hang chua co.\n"
     "4. KHONG hien thi: score, product_id, metadata, hay thong tin he thong.\n"
-    "5. Tra loi bang Tieng Viet tu nhien, than thien, dinh dang Markdown.\n"
+    "5. Tra loi theo NGON NGU o cuoi prompt, tu nhien, than thien, dinh dang Markdown.\n"
     "6. Neu khach muon SO SANH 2+ san pham -> goi transfer_to_compare_agent.\n"
     "7. Neu khach chua ro nhu cau -> dat 1-2 cau hoi goi y.\n\n"
     "QUY TRINH MUA HANG:\n"
@@ -58,7 +58,7 @@ COMPARE_SYSTEM = (
     "CHI dung con so co trong bang; KHONG tu tinh chenh lech, KHONG them thong so ngoai bang.\n"
     "4. Neu khong tim thay mot may trong kho -> noi ro cua hang chua co may do.\n"
     "5. KHONG hien thi: score, product_id, metadata.\n"
-    "6. Tra loi bang Tieng Viet, dinh dang Markdown.\n"
+    "6. Tra loi theo NGON NGU o cuoi prompt, dinh dang Markdown.\n"
     "7. Khi khach muon MUA / DAT HANG (vd 'lay cho minh 1 chiec', 'dat may nay') -> goi "
     "transfer_to_sales_agent NGAY de tu van vien ban hang dat don. KHONG dung "
     "request_human_support cho viec dat hang. Ngoai ra, KHONG tu chuyen sau khi so sanh.\n\n"
@@ -68,6 +68,18 @@ COMPARE_SYSTEM = (
     "9. Neu khach dong y muon nhan vien tu van -> goi request_human_support "
     "va hoi khach de lai ho ten + so dien thoai.\n"
 )
+
+
+# Them vao cuoi system prompt theo ngon ngu khach chon tren giao dien
+LANGUAGE_NOTES: dict[str, str] = {
+    "vi": "\n\nNGON NGU: Tieng Viet tu nhien, co dau.",
+    "en": (
+        "\n\nLANGUAGE: reply in natural, friendly English. Translate any fixed Vietnamese "
+        "phrase in the rules above (for example the follow-up question after a comparison). "
+        "Keep product names as they are and prices in VND (₫). Tool data may be in "
+        "Vietnamese: translate it, do not copy it."
+    ),
+}
 
 
 # ------------------------------------------------------------------

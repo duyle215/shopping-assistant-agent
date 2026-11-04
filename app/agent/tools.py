@@ -75,6 +75,7 @@ def _exec_compare(args: dict) -> str:
     result = compare_products(
         product_ids=[int(i) for i in args.get("product_ids") or []],
         aspects=args.get("aspects") or None,
+        lang=args.get("lang") or "vi",
     )
     return json.dumps(result, ensure_ascii=False)
 
