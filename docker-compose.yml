@@ -1,8 +1,24 @@
-# App + PostgreSQL + Qdrant in one command:
-#   cp .env.example .env        # set the LLM key and POSTGRES_PASSWORD
+# Odoo 19 + chatbot + PostgreSQL + Qdrant:
+#   cp .env.example .env                       # set the LLM key and the two DB passwords
 #   docker compose up -d --build
-#   docker compose run --rm app python scripts/ingest_data.py
-#   open http://localhost:5000
+#   docker compose run --rm odoo-setup         # once: install the addon, create API users and keys
+#   docker compose run --rm app python scripts/sync_odoo.py   # catalog -> Odoo -> Qdrant
+#   open http://localhost:8069 (Odoo website, chat button) and http://localhost:5000 (chat page)
+
+x-odoo: &odoo
+  image: odoo:19
+  environment:
+    HOST: postgres
+    USER: odoo
+    PASSWORD: ${ODOO_DB_PASSWORD:?set ODOO_DB_PASSWORD in .env}
+    CHAT_APP_URL: ${CHAT_APP_URL:-http://localhost:5000}
+  volumes:
+    - ./odoo/odoo.conf:/etc/odoo/odoo.conf:ro
+    - ./odoo/addons:/mnt/extra-addons:ro
+    - odoo_data:/var/lib/odoo
+  depends_on:
+    postgres:
+      condition: service_healthy
 
 services:
   postgres:
@@ -11,12 +27,33 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-shopping_assistant}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      ODOO_DB_PASSWORD: ${ODOO_DB_PASSWORD:?set ODOO_DB_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./odoo/postgres-init.sh:/docker-entrypoint-initdb.d/10-odoo-role.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       retries: 10
+
+  odoo:
+    <<: *odoo
+    # One database for the shop; the test and evaluation databases need ODOO_DB_FILTER=^odoo
+    command: ["--", "--db-filter", "${ODOO_DB_FILTER:-^odoo$$}"]
+    ports:
+      - "8069:8069"
+
+  odoo-setup:
+    <<: *odoo
+    profiles: ["setup"]
+    user: root  # writes the API keys to ./odoo/secrets
+    entrypoint: ["/setup/setup_db.sh"]
+    volumes:
+      - ./odoo/odoo.conf:/etc/odoo/odoo.conf:ro
+      - ./odoo/addons:/mnt/extra-addons:ro
+      - odoo_data:/var/lib/odoo
+      - ./odoo:/setup:ro
+      - ./odoo/secrets:/secrets
 
   qdrant:
     image: qdrant/qdrant:v1.17.0
@@ -30,6 +67,9 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       QDRANT_URL: http://qdrant:6333
+      ODOO_URL: http://odoo:8069
+    volumes:
+      - ./odoo/secrets:/app/odoo/secrets:ro
     ports:
       - "5000:5000"
     depends_on:
@@ -37,7 +77,10 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
+      odoo:
+        condition: service_started
 
 volumes:
   pgdata:
+  odoo_data:
   qdrant_storage:

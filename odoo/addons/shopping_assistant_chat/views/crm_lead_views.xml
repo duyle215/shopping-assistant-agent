@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="crm_lead_form_chat_session" model="ir.ui.view">
+        <field name="name">crm.lead.form.chat.session</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='tag_ids']" position="after">
+                <field name="chat_session_id" invisible="not chat_session_id"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

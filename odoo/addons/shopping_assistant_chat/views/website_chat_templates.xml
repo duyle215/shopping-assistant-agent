@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Floating chat button on every website page; the chat itself is the app's /embed page. -->
+    <template id="chat_widget" name="Shopping assistant chat" inherit_id="website.layout">
+        <xpath expr="//div[@id='wrapwrap']" position="after">
+            <t t-set="chat_url" t-value="website.chat_assistant_url(request.lang.code if request.lang else None)"/>
+            <div t-if="chat_url" id="sa_chat" class="d-print-none"
+                 style="position:fixed;right:20px;bottom:20px;z-index:1050;">
+                <div id="sa_chat_panel" class="shadow-lg"
+                     style="display:none;width:380px;max-width:calc(100vw - 40px);height:600px;max-height:calc(100vh - 110px);margin-bottom:12px;border-radius:14px;overflow:hidden;background:#fff;">
+                    <iframe t-att-data-src="chat_url" title="Shopping assistant"
+                            style="width:100%;height:100%;border:0;"/>
+                </div>
+                <button type="button" id="sa_chat_toggle" class="btn btn-primary rounded-circle shadow float-end"
+                        style="width:60px;height:60px;font-size:26px;" aria-label="Chat"
+                        onclick="var p=document.getElementById('sa_chat_panel'),f=p.querySelector('iframe');if(!f.src){f.src=f.dataset.src;}p.style.display=p.style.display==='none'?'block':'none';">
+                    <i class="fa fa-comments"/>
+                </button>
+            </div>
+        </xpath>
+    </template>
+</odoo>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Base URL of the chatbot app, as seen by the visitor's browser. Empty hides the widget. -->
+    <record id="param_app_url" model="ir.config_parameter">
+        <field name="key">shopping_assistant_chat.app_url</field>
+        <field name="value">http://localhost:5000</field>
+    </record>
+</odoo>
