@@ -30,3 +30,8 @@ def test_order_claim_without_tool_is_flagged():
 def test_normal_answer_has_no_claims():
     answer = "Galaxy A55 giá 9.490.000đ, pin 5000 mAh. Anh có muốn đặt hàng không ạ?"
     assert unbacked_action_claims(answer, []) == []
+
+
+def test_staff_callback_after_order_is_not_a_support_claim():
+    answer = "Đơn hàng đã được ghi nhận. Nhân viên sẽ liên hệ với anh để xác nhận giao hàng."
+    assert unbacked_action_claims(answer, ["check_inventory", "place_order"]) == []

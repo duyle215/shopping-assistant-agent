@@ -6,6 +6,7 @@ Moi module trong project import tu day thay vi tu doc os.getenv rieng le.
 
 import os
 import sys
+from urllib.parse import quote
 
 from dotenv import load_dotenv
 
@@ -47,6 +48,11 @@ PG_PASSWORD = _require("POSTGRES_PASSWORD")
 
 PG_URL = (
     f"postgresql+psycopg2://{PG_USER}:{PG_PASSWORD}" f"@{PG_HOST}:{PG_PORT}/{PG_DB}"
+)
+# DSN cho psycopg 3 (LangGraph checkpointer luu trang thai hoi thoai)
+PG_DSN = (
+    f"postgresql://{quote(PG_USER, safe='')}:{quote(PG_PASSWORD, safe='')}"
+    f"@{PG_HOST}:{PG_PORT}/{PG_DB}"
 )
 
 # ------------------------------------------------------------------

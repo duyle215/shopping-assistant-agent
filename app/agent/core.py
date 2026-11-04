@@ -1,257 +1,131 @@
 """
-Shopping Agent Core - Agent Loop.
+Shopping Agent - lop boc quanh agent graph (app/agent/graph.py).
 
-Day la trung tam dieu phoi:
-  - Agent Loop:   LLM tu quyet dinh goi tool, lap lai cho den khi xong.
-  - Handoffs:     SalesAgent <-> CompareAgent uy quyen cho nhau.
-  - Sessions:     Nho lich su hoi thoai (hieu "cai do" la gi).
-  - Guardrails:   Kiem tra input/output, chan prompt injection.
+  - Trang thai hoi thoai luu trong PostgreSQL (LangGraph PostgresSaver), thread_id = session_id,
+    nen restart server khong mat hoi thoai.
+  - run():     chay mot luot, tra ve AgentResponse (dung cho /api/chat va bo danh gia).
+  - stream():  chay mot luot va phat su kien (token, tool, confirm, final) cho SSE.
+  - confirm(): tra loi cau hoi xac nhan don hang (Xac nhan / Huy) roi chay tiep.
 """
 
 from __future__ import annotations
 
-import json
+import atexit
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from typing import Iterator, Optional
 
-from openai import OpenAI
+from langgraph.types import Command
 
-from app.config import AGENT_API_KEY, AGENT_BASE_URL, LLM_MODEL, MAX_ITERATIONS
-from app.guardrails import check_input, check_output, unbacked_action_claims
-from app.sessions import SessionStore
+from app.agent.graph import build_graph, new_turn_input, tools_called
 from app.agent.schemas import AgentResponse
-from app.agent.prompts import HANDOFF_MAP, build_agent_configs
-from app.agent.tools import TOOL_DEFS, TOOL_DISPATCH
-from app.services.compare import unsupported_numbers
 
-# ------------------------------------------------------------------
-# LOGGING
-# ------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
 logger = logging.getLogger("agent")
 
-# ------------------------------------------------------------------
-# BUILD AGENT CONFIGS (lien ket prompts + tool defs)
-# ------------------------------------------------------------------
-AGENT_CONFIGS = build_agent_configs(TOOL_DEFS)
 
-# Tool can session_id that cua cuoc hoi thoai
-SESSION_TOOLS = {"request_human_support", "save_customer_info"}
+def _postgres_checkpointer():
+    from langgraph.checkpoint.postgres import PostgresSaver
+    from psycopg.rows import dict_row
+    from psycopg_pool import ConnectionPool
+
+    from app.config import PG_DSN
+
+    pool = ConnectionPool(
+        PG_DSN,
+        min_size=1,
+        max_size=10,
+        kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
+        open=True,
+    )
+    atexit.register(pool.close)
+    saver = PostgresSaver(pool)
+    saver.setup()
+    return saver
 
 
-# ------------------------------------------------------------------
-# SHOPPING AGENT CLASS
-# ------------------------------------------------------------------
 class ShoppingAgent:
-    """
-    Agent tu van mua dien thoai voi day du:
-    - Agent Loop (LLM tu goi tool, lap lai den khi xong)
-    - Handoffs (SalesAgent <-> CompareAgent)
-    - Sessions (nho lich su hoi thoai)
-    - Guardrails (kiem tra input/output)
-    """
+    def __init__(self, checkpointer=None) -> None:
+        self.checkpointer = checkpointer if checkpointer is not None else _postgres_checkpointer()
+        self.graph = build_graph(self.checkpointer)
 
-    def __init__(self) -> None:
-        self.client = OpenAI(
-            base_url=AGENT_BASE_URL,
-            api_key=AGENT_API_KEY,
-        )
-        self.sessions = SessionStore(max_turns=20, ttl_seconds=3600)
-        self._executor = ThreadPoolExecutor(max_workers=2)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def new_session_id() -> str:
+        import uuid
 
-    def run(self, user_message: str, session_id: str | None = None) -> AgentResponse:
-        """Entry point chinh. Chay agent loop voi guardrails va sessions."""
+        return str(uuid.uuid4())
 
-        if not session_id:
-            session_id = self.sessions.new_id()
+    def _config(self, session_id: str) -> dict:
+        return {"configurable": {"thread_id": session_id}}
 
-        # -- Guardrail: Kiem tra input --
-        input_check = check_input(user_message)
-        if not input_check.passed:
-            logger.warning(f"[Guardrail] Input blocked: {input_check.reason}")
+    def pending_confirmation(self, session_id: str) -> Optional[dict]:
+        """Cau hoi xac nhan dang cho (neu co)."""
+        snapshot = self.graph.get_state(self._config(session_id))
+        for task in snapshot.tasks:
+            for intr in task.interrupts:
+                return intr.value
+        return None
+
+    def _response(self, session_id: str) -> AgentResponse:
+        snapshot = self.graph.get_state(self._config(session_id))
+        values = snapshot.values
+        pending = self.pending_confirmation(session_id)
+        if pending:
             return AgentResponse(
-                intent="blocked",
-                answer_markdown=input_check.reason or "Tin nhan khong hop le.",
-                tools_called=[],
-                warning=input_check.reason,
+                intent="confirm_order",
+                answer_markdown="Vui lòng xác nhận đơn hàng trước khi mình đặt.",
+                tools_called=tools_called(values.get("turn", [])),
                 session_id=session_id,
+                pending_confirmation=pending,
             )
-
-        # -- Load lich su hoi thoai --
-        history = self.sessions.get_messages(session_id)
-
-        # -- Xay dung messages: system + history + user --
-        current_agent = AGENT_CONFIGS["sales"]
-        messages: list[dict] = [
-            {"role": "system", "content": current_agent.system_prompt}
-        ]
-        messages.extend(history)
-        messages.append({"role": "user", "content": user_message})
-
-        tools_called: list[str] = []
-        tool_outputs: list[str] = []  # du lieu tool tra ve, de doi chieu so lieu
-        number_check_retried = False
-        action_check_retried = False
-        warning: str | None = None
-
-        # ====== AGENT LOOP ======
-        for iteration in range(MAX_ITERATIONS):
-            logger.info(
-                f"[{current_agent.name}] Vong {iteration + 1} | "
-                f"So messages: {len(messages)}"
-            )
-
-            response = self.client.chat.completions.create(
-                model=LLM_MODEL,
-                messages=messages,
-                tools=current_agent.tools,
-            )
-
-            msg = response.choices[0].message
-
-            # ---- LLM tra ve van ban (ket thuc loop) ----
-            if not msg.tool_calls:
-                answer = msg.content or ""
-
-                # Noi "da dat hang" / "nhan vien se lien he" thi phai that su goi tool
-                claims = unbacked_action_claims(answer, tools_called)
-                if claims and not action_check_retried:
-                    action_check_retried = True
-                    logger.warning(f"[ActionCheck] Noi da lam nhung chua goi: {claims}")
-                    messages.append({"role": "assistant", "content": answer})
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": (
-                                "[He thong] Cau tra loi noi da thuc hien hanh dong nhung luot nay "
-                                f"chua goi tool: {', '.join(claims)}. Neu can thuc hien, hay goi "
-                                "tool do roi tra loi lai. Neu viec do da lam o luot truoc, tra loi "
-                                "lai va noi ro la da tao tu truoc."
-                            ),
-                        }
-                    )
-                    continue
-                if claims:
-                    warning = f"Cau tra loi noi da {', '.join(claims)} nhung khong goi tool"
-                    logger.warning(f"[ActionCheck] {warning}")
-
-                # Cau tra loi so sanh: moi con so phai co trong du lieu tool tra ve
-                if "compare_products" in tools_called:
-                    bad = unsupported_numbers(answer, tool_outputs)
-                    if bad and not number_check_retried:
-                        number_check_retried = True
-                        logger.warning(f"[NumberCheck] So khong co trong bang: {bad}, yeu cau viet lai")
-                        messages.append({"role": "assistant", "content": answer})
-                        messages.append(
-                            {
-                                "role": "user",
-                                "content": (
-                                    "[He thong] Cau tra loi co so lieu khong co trong bang so sanh: "
-                                    f"{', '.join(bad)}. Viet lai, chep nguyen bang table_markdown "
-                                    "va chi dung so co trong bang."
-                                ),
-                            }
-                        )
-                        continue
-                    if bad:
-                        warning = f"So lieu chua kiem chung: {', '.join(bad)}"
-                        logger.warning(f"[NumberCheck] {warning}")
-                logger.info(
-                    f"[{current_agent.name}] Hoan thanh sau {iteration + 1} vong"
-                )
-
-                # Guardrail: Kiem tra output
-                output_check = check_output(answer)
-                if not output_check.passed:
-                    logger.warning(f"[Guardrail] Output blocked: {output_check.reason}")
-                    answer = (
-                        "Xin loi, da xay ra loi khi xu ly cau tra loi. "
-                        "Vui long hoi lai."
-                    )
-
-                # Luu vao session
-                self.sessions.add_message(session_id, "user", user_message)
-                self.sessions.add_message(session_id, "assistant", answer)
-
-                return AgentResponse(
-                    intent=current_agent.name,
-                    answer_markdown=answer,
-                    tools_called=tools_called,
-                    warning=warning,
-                    session_id=session_id,
-                )
-
-            # ---- LLM goi tool(s) ----
-            messages.append(msg)
-
-            for tc in msg.tool_calls:
-                fn_name = tc.function.name
-                fn_args_raw = tc.function.arguments or "{}"
-                try:
-                    fn_args = json.loads(fn_args_raw)
-                except json.JSONDecodeError:
-                    fn_args = {}
-
-                logger.info(f"[{current_agent.name}] Tool: {fn_name}({fn_args})")
-
-                # -- Handoff --
-                if fn_name in HANDOFF_MAP:
-                    target_key = HANDOFF_MAP[fn_name]
-                    current_agent = AGENT_CONFIGS[target_key]
-                    messages[0] = {
-                        "role": "system",
-                        "content": current_agent.system_prompt,
-                    }
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": f"Da chuyen sang {current_agent.name}.",
-                        }
-                    )
-                    tools_called.append(fn_name)
-                    logger.info(f"[Handoff] -> {current_agent.name}")
-                    continue
-
-                # -- Thuc thi tool --
-                # session_id do server gan, model khong biet (va khong duoc bia) gia tri nay
-                if fn_name in SESSION_TOOLS:
-                    fn_args["session_id"] = session_id
-                tools_called.append(fn_name)
-                dispatch_fn = TOOL_DISPATCH.get(fn_name)
-                if dispatch_fn:
-                    try:
-                        result_str = dispatch_fn(fn_args)
-                    except Exception as e:
-                        logger.error(f"[Tool Error] {fn_name}: {e}")
-                        result_str = json.dumps({"error": str(e)}, ensure_ascii=False)
-                else:
-                    result_str = json.dumps(
-                        {"error": f"Tool '{fn_name}' khong ton tai"},
-                        ensure_ascii=False,
-                    )
-
-                tool_outputs.append(result_str)
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": result_str,
-                    }
-                )
-
-        # -- Vuot qua MAX_ITERATIONS --
-        logger.warning(f"[Agent] Dat gioi han {MAX_ITERATIONS} vong lap!")
         return AgentResponse(
-            intent="error",
-            answer_markdown=(
-                "Xin loi, toi khong the xu ly yeu cau nay luc nay. "
-                "Vui long thu lai voi cau hoi don gian hon."
-            ),
-            tools_called=tools_called,
-            warning=f"Dat gioi han {MAX_ITERATIONS} vong lap",
+            intent=values.get("intent") or "unknown",
+            answer_markdown=values.get("answer") or "",
+            tools_called=tools_called(values.get("turn", [])),
+            warning=values.get("warning"),
             session_id=session_id,
         )
+
+    def _cancel_pending(self, session_id: str) -> None:
+        """Khach gui tin moi thay vi bam nut: coi nhu huy don dang cho xac nhan."""
+        if self.pending_confirmation(session_id):
+            logger.info(f"[Confirm] {session_id}: tin nhan moi -> huy don dang cho")
+            self.graph.invoke(Command(resume={"approved": False}), self._config(session_id))
+
+    # ------------------------------------------------------------------
+    def run(self, user_message: str, session_id: Optional[str] = None) -> AgentResponse:
+        session_id = session_id or self.new_session_id()
+        self._cancel_pending(session_id)
+        self.graph.invoke(new_turn_input(user_message), self._config(session_id))
+        return self._response(session_id)
+
+    def confirm(self, session_id: str, approved: bool) -> AgentResponse:
+        if not self.pending_confirmation(session_id):
+            return self._response(session_id)
+        self.graph.invoke(Command(resume={"approved": approved}), self._config(session_id))
+        return self._response(session_id)
+
+    # ------------------------------------------------------------------
+    def _stream(self, graph_input, session_id: str) -> Iterator[dict]:
+        for chunk in self.graph.stream(
+            graph_input, self._config(session_id), stream_mode="custom"
+        ):
+            yield chunk
+        yield {"type": "final", **self._response(session_id).model_dump()}
+
+    def stream(self, user_message: str, session_id: Optional[str] = None) -> Iterator[dict]:
+        session_id = session_id or self.new_session_id()
+        self._cancel_pending(session_id)
+        yield from self._stream(new_turn_input(user_message), session_id)
+
+    def stream_confirm(self, session_id: str, approved: bool) -> Iterator[dict]:
+        if not self.pending_confirmation(session_id):
+            yield {"type": "final", **self._response(session_id).model_dump()}
+            return
+        yield from self._stream(Command(resume={"approved": approved}), session_id)
+
+    def clear(self, session_id: str) -> None:
+        self.checkpointer.delete_thread(session_id)

@@ -31,13 +31,15 @@ SALES_SYSTEM = (
     "10. Neu KHONG du hang -> bao khach so luong hien tai, "
     "goi place_order (se tu dong tao yeu cau restock), "
     "va HOI KHACH de lai ho ten + so dien thoai de nhan vien lien he khi hang ve.\n"
-    "11. Khi khach cung cap ho ten va SDT -> goi save_customer_info de luu lai.\n\n"
+    "11. Khi khach cung cap ho ten va SDT -> goi save_customer_info de luu lai.\n"
+    "12. Goi place_order thi he thong se hien nut Xac nhan / Huy cho khach. Neu ket qua "
+    "co status 'cancelled' -> bao khach don CHUA duoc dat va hoi khach muon doi gi.\n\n"
     "HUMAN-IN-THE-LOOP (QUAN TRONG):\n"
-    "12. Khi cau hoi NGOAI pham vi CSDL san pham (bao hanh, doi tra, khuyen mai, "
+    "13. Khi cau hoi NGOAI pham vi CSDL san pham (bao hanh, doi tra, khuyen mai, "
     "thanh toan, giao hang, sua chua, ...) -> TUYET DOI KHONG tu suy dien!\n"
     "    Thay vao do: noi thang la cua hang chua co thong tin nay trong he thong, "
     "    goi request_human_support va de nghi khach de lai thong tin de nhan vien goi lai.\n"
-    "13. Khi khach yeu cau noi chuyen voi nhan vien -> goi request_human_support ngay.\n"
+    "14. Khi khach yeu cau noi chuyen voi nhan vien -> goi request_human_support ngay.\n"
 )
 
 COMPARE_SYSTEM = (

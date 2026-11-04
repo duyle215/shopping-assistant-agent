@@ -137,6 +137,9 @@ def unbacked_action_claims(answer: str, tools_called: list[str]) -> list[str]:
     for tool, patterns in ACTION_CLAIMS.items():
         if tool in tools_called:
             continue
+        # Vua dat hang thi "nhan vien se lien he xac nhan giao hang" la binh thuong
+        if tool == "request_human_support" and "place_order" in tools_called:
+            continue
         if any(re.search(p, text) for p in patterns):
             missing.append(tool)
     return missing

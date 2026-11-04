@@ -58,3 +58,5 @@ class AgentResponse(BaseModel):
     tools_called: list[str]
     warning: Optional[str] = None
     session_id: str = ""
+    # Don hang dang cho khach bam Xac nhan / Huy (None neu khong co)
+    pending_confirmation: Optional[dict] = None

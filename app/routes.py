@@ -4,7 +4,9 @@ Flask routes - Tat ca API endpoints.
 
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, render_template, request
+import json
+
+from flask import Blueprint, Response, jsonify, render_template, request, stream_with_context
 from sqlalchemy import text
 
 from app.db import get_engine, get_qdrant
@@ -43,6 +45,7 @@ def products_page():
 # ------------------------------------------------------------------
 @api.post("/api/chat")
 def api_chat():
+    """Mot luot chat, tra JSON. Neu can xac nhan don hang: pending_confirmation != null."""
     data = request.get_json(force=True)
     message = (data.get("message") or "").strip()
     session_id = data.get("session_id") or None
@@ -50,19 +53,61 @@ def api_chat():
         return jsonify({"error": "Tin nhan trong."}), 400
 
     try:
-        agent = _get_agent()
-        result = agent.run(message, session_id=session_id)
-        return jsonify(
-            {
-                "intent": result.intent,
-                "answer_markdown": result.answer_markdown,
-                "tools_called": result.tools_called,
-                "warning": result.warning,
-                "session_id": result.session_id,
-            }
-        )
+        result = _get_agent().run(message, session_id=session_id)
+        return jsonify(result.model_dump())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@api.post("/api/chat/confirm")
+def api_chat_confirm():
+    """Tra loi cau hoi xac nhan don hang: {"session_id": "...", "approved": true/false}."""
+    data = request.get_json(force=True)
+    session_id = data.get("session_id")
+    if not session_id:
+        return jsonify({"error": "Thieu session_id."}), 400
+    try:
+        result = _get_agent().confirm(session_id, bool(data.get("approved")))
+        return jsonify(result.model_dump())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def _sse(events):
+    """Server-Sent Events: moi su kien la mot dong 'data: <json>'."""
+
+    def generate():
+        try:
+            for event in events:
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)}, ensure_ascii=False)}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@api.post("/api/chat/stream")
+def api_chat_stream():
+    """Nhu /api/chat nhung stream: token, tool dang chay, confirm, final."""
+    data = request.get_json(force=True)
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify({"error": "Tin nhan trong."}), 400
+    session_id = data.get("session_id") or _get_agent().new_session_id()
+    return _sse(_get_agent().stream(message, session_id=session_id))
+
+
+@api.post("/api/chat/confirm/stream")
+def api_chat_confirm_stream():
+    data = request.get_json(force=True)
+    session_id = data.get("session_id")
+    if not session_id:
+        return jsonify({"error": "Thieu session_id."}), 400
+    return _sse(_get_agent().stream_confirm(session_id, bool(data.get("approved"))))
 
 
 @api.post("/api/session/clear")
@@ -70,9 +115,25 @@ def api_session_clear():
     data = request.get_json(force=True)
     session_id = data.get("session_id")
     if session_id:
-        agent = _get_agent()
-        agent.sessions.clear(session_id)
+        _get_agent().clear(session_id)
     return jsonify({"status": "ok"})
+
+
+@api.get("/api/traces")
+def api_traces():
+    """Cac buoc gan day (goi LLM, goi tool, tong luot). ?session_id=...&limit=50"""
+    from app import tracing
+
+    limit = min(int(request.args.get("limit", 50)), 500)
+    return jsonify({"traces": tracing.recent(limit, request.args.get("session_id"))})
+
+
+@api.get("/api/traces/summary")
+def api_traces_summary():
+    from app import tracing
+
+    hours = min(int(request.args.get("hours", 24)), 24 * 30)
+    return jsonify(tracing.summary(hours))
 
 
 @api.get("/api/stock")

@@ -489,7 +489,8 @@
       #panel-health {
         flex-direction: column;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start;
+        overflow-y: auto;
         gap: 12px;
         padding: 30px;
       }
@@ -499,7 +500,7 @@
         border: 1px solid #e8e8e8;
         padding: 20px 30px;
         width: 100%;
-        max-width: 420px;
+        max-width: 520px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
       }
       .health-card h2 {
@@ -564,6 +565,103 @@
         padding: 4px;
         background: #f8f8f8;
         border-bottom: 1px solid #eee;
+      }
+      /* ── STREAMING + ORDER CONFIRMATION ── */
+      .status-line {
+        font-size: 0.8rem;
+        color: #667;
+        margin-bottom: 6px;
+      }
+      .status-line:empty {
+        display: none;
+      }
+      .confirm-card {
+        border: 1px solid #ffd0d8;
+        background: #fff7f8;
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-top: 8px;
+      }
+      .confirm-card h4 {
+        font-size: 0.92rem;
+        margin-bottom: 8px;
+      }
+      .confirm-card table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+        margin-bottom: 10px;
+      }
+      .confirm-card td {
+        padding: 3px 0;
+      }
+      .confirm-card td:last-child {
+        text-align: right;
+        font-weight: 600;
+      }
+      .confirm-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .confirm-actions button {
+        padding: 7px 16px;
+        border-radius: 8px;
+        border: 1px solid #e94560;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+      .confirm-actions .yes {
+        background: #e94560;
+        color: #fff;
+      }
+      .confirm-actions .no {
+        background: #fff;
+        color: #e94560;
+      }
+      .confirm-actions button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .confirm-done {
+        font-size: 0.82rem;
+        color: #667;
+      }
+
+      /* ── TRACE SUMMARY ── */
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .stat {
+        background: #f7f7fb;
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+      .stat .v {
+        font-size: 1.1rem;
+        font-weight: 700;
+      }
+      .stat .k {
+        font-size: 0.72rem;
+        color: #888;
+      }
+      .tool-stats {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.82rem;
+      }
+      .tool-stats th,
+      .tool-stats td {
+        text-align: left;
+        padding: 4px 2px;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      .tool-stats td:not(:first-child),
+      .tool-stats th:not(:first-child) {
+        text-align: right;
       }
     </style>
   </head>
@@ -687,6 +785,12 @@
           <div class="health-row"><span>Đang kiểm tra...</span></div>
         </div>
       </div>
+      <div class="health-card">
+        <h2>Hoạt động 24 giờ qua</h2>
+        <div id="traceSummary">
+          <div class="health-row"><span>Đang tải...</span></div>
+        </div>
+      </div>
       <button class="health-refresh" onclick="loadHealth()">
         Kiểm tra lại
       </button>
@@ -776,74 +880,166 @@
         return div;
       }
 
-      function showTyping() {
+
+      // ── STREAMING CHAT ──────────────────────────────────────────
+      const TOOL_LABELS = {
+        search_products: "Đang tìm sản phẩm...",
+        get_product_details: "Đang xem thông số...",
+        compare_products: "Đang dựng bảng so sánh...",
+        check_inventory: "Đang kiểm tra tồn kho...",
+        place_order: "Đang tạo đơn hàng...",
+        save_customer_info: "Đang lưu thông tin liên hệ...",
+        request_human_support: "Đang chuyển cho nhân viên...",
+        transfer_to_compare_agent: "Chuyển sang chuyên gia so sánh...",
+        transfer_to_sales_agent: "Chuyển về tư vấn bán hàng...",
+      };
+
+      // Doc SSE tu fetch POST; goi onEvent cho moi su kien JSON
+      async function postStream(url, body, onEvent) {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf("\n\n")) >= 0) {
+            const raw = buf.slice(0, i);
+            buf = buf.slice(i + 2);
+            if (raw.startsWith("data: ")) onEvent(JSON.parse(raw.slice(6)));
+          }
+        }
+      }
+
+      // Bong bot "song": hien trang thai tool, chu dang stream, roi cau tra loi cuoi
+      function liveBot() {
         const wrap = document.getElementById("chatMessages");
         const div = document.createElement("div");
         div.className = "msg bot";
-        div.id = "typing-indicator";
-        div.innerHTML = `
-    <div class="avatar">🤖</div>
-    <div class="bubble">
-      <div class="typing"><span></span><span></span><span></span></div>
-    </div>`;
+        div.innerHTML = `<div class="avatar">🤖</div><div class="body">
+          <div class="bubble"><div class="status-line"></div><div class="content">
+          <div class="typing"><span></span><span></span><span></span></div></div></div></div>`;
         wrap.appendChild(div);
         wrap.scrollTop = wrap.scrollHeight;
+        const status = div.querySelector(".status-line");
+        const content = div.querySelector(".content");
+        let draft = "";
+        const scroll = () => (wrap.scrollTop = wrap.scrollHeight);
+        return {
+          div,
+          tool(name) {
+            status.textContent = TOOL_LABELS[name] || "Đang xử lý...";
+            scroll();
+          },
+          token(text) {
+            draft += text;
+            content.innerHTML = marked.parse(draft);
+            scroll();
+          },
+          reset() {
+            draft = "";
+            content.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+          },
+          final(data) {
+            status.textContent = "";
+            if (data.error) {
+              content.innerHTML = `<span style="color:#c62828">Lỗi: ${escapeHtml(data.error)}</span>`;
+              return;
+            }
+            content.innerHTML = marked.parse(data.answer_markdown || "");
+            if (data.pending_confirmation) renderConfirm(content, data.pending_confirmation);
+            const body = div.querySelector(".body");
+            let meta = `<div class="meta"><span>intent: ${data.intent}</span>`;
+            (data.tools_called || []).forEach((t) => (meta += `<span class="tool-tag">${t}</span>`));
+            meta += "</div>";
+            if (data.warning) meta += `<div class="warning-msg">⚠ ${escapeHtml(data.warning)}</div>`;
+            body.insertAdjacentHTML("beforeend", meta);
+            scroll();
+          },
+        };
       }
 
-      function removeTyping() {
-        const el = document.getElementById("typing-indicator");
-        if (el) el.remove();
+      function vnd(n) {
+        return n == null ? "—" : Number(n).toLocaleString("vi-VN") + " ₫";
+      }
+
+      // The xac nhan don hang (LangGraph interrupt) voi nut Xac nhan / Huy
+      function renderConfirm(container, pending) {
+        const rows = (pending.orders || [])
+          .map((o) => {
+            const total = o.unit_price && o.quantity ? o.unit_price * o.quantity : null;
+            return `<tr><td>${escapeHtml(o.product_name || "Sản phẩm #" + o.product_id)} × ${o.quantity}</td><td>${vnd(total)}</td></tr>`
+              + (o.customer_name || o.customer_phone
+                ? `<tr><td>Người nhận</td><td>${escapeHtml([o.customer_name, o.customer_phone].filter(Boolean).join(" · "))}</td></tr>`
+                : "");
+          })
+          .join("");
+        const card = document.createElement("div");
+        card.className = "confirm-card";
+        card.innerHTML = `<h4>Xác nhận đơn hàng</h4><table>${rows}</table>
+          <div class="confirm-actions"><button class="yes">Xác nhận đặt</button><button class="no">Huỷ</button></div>`;
+        container.appendChild(card);
+        const [yes, no] = card.querySelectorAll("button");
+        const answer = async (approved) => {
+          yes.disabled = no.disabled = true;
+          card.querySelector(".confirm-actions").outerHTML =
+            `<div class="confirm-done">${approved ? "Bạn đã xác nhận đặt hàng." : "Bạn đã huỷ đơn hàng."}</div>`;
+          await runStream("/api/chat/confirm/stream", { session_id: sessionId, approved });
+        };
+        yes.onclick = () => answer(true);
+        no.onclick = () => answer(false);
+      }
+
+      async function runStream(url, body) {
+        const btn = document.getElementById("sendBtn");
+        btn.disabled = true;
+        const bot = liveBot();
+        let finished = false;
+        try {
+          await postStream(url, body, (ev) => {
+            if (ev.type === "token") bot.token(ev.text);
+            else if (ev.type === "tool") bot.tool(ev.name);
+            else if (ev.type === "reset") bot.reset();
+            else if (ev.type === "final") {
+              finished = true;
+              if (ev.session_id) {
+                sessionId = ev.session_id;
+                localStorage.setItem("session_id", sessionId);
+              }
+              bot.final(ev);
+            } else if (ev.type === "error") {
+              finished = true;
+              bot.final({ error: ev.error });
+            }
+          });
+          if (!finished) bot.final({ error: "Kết nối bị ngắt giữa chừng." });
+        } catch (err) {
+          bot.final({ error: "Không thể kết nối đến server." });
+        } finally {
+          btn.disabled = false;
+          document.getElementById("userInput").focus();
+        }
       }
 
       async function sendMessage() {
         const input = document.getElementById("userInput");
-        const btn = document.getElementById("sendBtn");
         const text = input.value.trim();
         if (!text) return;
-
+        // Dang cho xac nhan ma khach go tin moi: server se coi nhu huy don
+        document.querySelectorAll(".confirm-actions").forEach((el) => {
+          el.outerHTML = '<div class="confirm-done">Đơn hàng chưa được xác nhận.</div>';
+        });
         appendMsg("user", escapeHtml(text));
         input.value = "";
         input.style.height = "44px";
-        btn.disabled = true;
-        showTyping();
-
-        try {
-          const res = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: text, session_id: sessionId }),
-          });
-          const data = await res.json();
-          removeTyping();
-
-          if (data.error) {
-            appendMsg(
-              "bot",
-              `<span style="color:#c62828">Lỗi: ${escapeHtml(data.error)}</span>`,
-            );
-          } else {
-            // Cap nhat session_id tu server (phong truong hop server tao moi)
-            if (data.session_id) {
-              sessionId = data.session_id;
-              localStorage.setItem("session_id", sessionId);
-            }
-            const html = marked.parse(data.answer_markdown || "");
-            appendMsg("bot", html, {
-              intent: data.intent,
-              tools_called: data.tools_called,
-              warning: data.warning,
-            });
-          }
-        } catch (err) {
-          removeTyping();
-          appendMsg(
-            "bot",
-            `<span style="color:#c62828">Không thể kết nối đến server.</span>`,
-          );
-        } finally {
-          btn.disabled = false;
-          input.focus();
-        }
+        await runStream("/api/chat/stream", { message: text, session_id: sessionId });
       }
 
       function escapeHtml(str) {
@@ -1086,6 +1282,28 @@
         } catch {
           rows.innerHTML =
             '<div class="health-row"><span style="color:red">Không thể kết nối server.</span></div>';
+        }
+        loadTraceSummary();
+      }
+
+      async function loadTraceSummary() {
+        const el = document.getElementById("traceSummary");
+        try {
+          const d = await (await fetch("/api/traces/summary")).json();
+          const ms = (v) => (v == null ? "—" : v >= 1000 ? (v / 1000).toFixed(1) + " s" : v + " ms");
+          const num = (v) => Number(v || 0).toLocaleString("vi-VN");
+          const tools = (d.tools || [])
+            .map((t) => `<tr><td>${t.name}</td><td>${t.calls}</td><td>${ms(t.avg_ms)}</td><td>${t.errors}</td></tr>`)
+            .join("");
+          el.innerHTML = `<div class="stats-grid">
+              <div class="stat"><div class="v">${num(d.turns.count)}</div><div class="k">Lượt chat</div></div>
+              <div class="stat"><div class="v">${ms(d.turns.avg_ms)} / ${ms(d.turns.p95_ms)}</div><div class="k">Thời gian một lượt (TB / p95)</div></div>
+              <div class="stat"><div class="v">${num(d.llm.calls)}</div><div class="k">Lần gọi LLM · TB ${ms(d.llm.avg_ms)}</div></div>
+              <div class="stat"><div class="v">${num(d.llm.prompt_tokens)} / ${num(d.llm.completion_tokens)}</div><div class="k">Token vào / ra</div></div>
+            </div>
+            <table class="tool-stats"><tr><th>Tool</th><th>Lần gọi</th><th>TB</th><th>Lỗi</th></tr>${tools || '<tr><td colspan="4">Chưa có dữ liệu</td></tr>'}</table>`;
+        } catch {
+          el.innerHTML = '<div class="health-row"><span style="color:red">Không tải được thống kê.</span></div>';
         }
       }
     </script>

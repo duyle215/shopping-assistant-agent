@@ -26,6 +26,12 @@ def create_app() -> Flask:
     # Giu thu tu key nhu trong code (vd thu tu thong so tren the san pham)
     app.json.sort_keys = False
 
+    # Tao bang con thieu (vd traces) - khong xoa du lieu
+    from app.db import get_engine
+    from app.models import create_tables
+
+    create_tables(get_engine())
+
     # Khoi tao agent mot lan duy nhat
     from app.agent import ShoppingAgent
 
