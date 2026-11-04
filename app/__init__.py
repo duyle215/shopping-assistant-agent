@@ -23,6 +23,9 @@ def create_app() -> Flask:
         template_folder=os.path.join(basedir, "templates"),
     )
 
+    # Giu thu tu key nhu trong code (vd thu tu thong so tren the san pham)
+    app.json.sort_keys = False
+
     # Khoi tao agent mot lan duy nhat
     from app.agent import ShoppingAgent
 
