@@ -61,7 +61,7 @@ def agent(monkeypatch):
 
 def _order_script():
     return [
-        {"role": "assistant", "content": None, "tool_calls": [_call("place_order", {"product_id": 1, "quantity": 1}, "c1")]},
+        {"role": "assistant", "content": None, "tool_calls": [_call("place_order", {"product_id": 1, "quantity": 1, "customer_name": "An", "customer_phone": "0901"}, "c1")]},
         {"role": "assistant", "content": "Đơn hàng đã được ghi nhận thành công!"},
     ]
 
@@ -211,3 +211,20 @@ def test_blocked_input_skips_llm(agent, monkeypatch):
 
     assert reply.intent == "blocked"
     assert script.calls == []
+
+
+def test_order_without_contact_asks_for_it_instead_of_confirming(agent, fake_tools, monkeypatch):
+    script = ScriptedLLM(
+        [
+            {"role": "assistant", "content": None, "tool_calls": [_call("place_order", {"product_id": 1, "quantity": 1}, "n1")]},
+            {"role": "assistant", "content": "Anh cho em xin họ tên và số điện thoại người nhận ạ."},
+        ]
+    )
+    monkeypatch.setattr(llm, "chat", script)
+
+    reply = agent.run("Mua 1 máy", "s10")
+
+    assert reply.pending_confirmation is None
+    assert fake_tools == []
+    tool_msg = [m for m in script.calls[-1] if m["role"] == "tool"][-1]
+    assert json.loads(tool_msg["content"])["status"] == "need_customer_info"

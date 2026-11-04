@@ -150,7 +150,8 @@ def turn_tool_calls(agent, session_id: str) -> tuple[list[tuple[str, dict]], lis
 def check_turn(turn: dict, resp, calls, had_pending: bool, allowed: set[int]) -> list[str]:
     fails: list[str] = []
     answer = resp.answer_markdown or ""
-    low = answer.lower()
+    # So noi dung tren chu thuan: "còn **7** chiếc" -> "còn 7 chiếc"
+    low = re.sub(r"[*_`]+", "", answer).lower()
     names = [n for n, _ in calls]
 
     if not answer.strip():

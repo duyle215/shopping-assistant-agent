@@ -173,9 +173,17 @@ def route_after_agent(state: State) -> str:
     rounds = sum(1 for m in state["turn"] if m.get("role") == "assistant")
     if rounds >= MAX_ITERATIONS:
         return "too_many_rounds"
-    if any(c["function"]["name"] == "place_order" for c in calls):
+    # Chi hoi xac nhan khi don da du thong tin; thieu ten/SDT thi tools node bao model hoi khach
+    if any(c["function"]["name"] == "place_order" and _has_contact(c) for c in calls):
         return "confirm_order"
     return "tools"
+
+
+def _has_contact(call: dict) -> bool:
+    args = _parse_args(call)
+    return bool(str(args.get("customer_name") or "").strip()) and bool(
+        str(args.get("customer_phone") or "").strip()
+    )
 
 
 def confirm_order(state: State, config) -> dict:
@@ -184,7 +192,7 @@ def confirm_order(state: State, config) -> dict:
 
     orders = []
     for call in _last_tool_calls(state["turn"]):
-        if call["function"]["name"] != "place_order":
+        if call["function"]["name"] != "place_order" or not _has_contact(call):
             continue
         args = _parse_args(call)
         product = get_product_details(int(args.get("product_id", 0)))
@@ -232,6 +240,15 @@ def tools(state: State, config) -> dict:
             new_agent = HANDOFF_MAP[name]
             result = f"Da chuyen sang {AGENT_CONFIGS[new_agent].name}."
             logger.info(f"[Handoff] -> {AGENT_CONFIGS[new_agent].name}")
+        elif name == "place_order" and not _has_contact(call):
+            result = json.dumps(
+                {
+                    "status": "need_customer_info",
+                    "message": "Chua tao don. Hoi khach HO TEN va SO DIEN THOAI nguoi nhan, "
+                    "roi goi lai place_order kem thong tin do.",
+                },
+                ensure_ascii=False,
+            )
         elif name == "place_order" and not state.get("order_decisions", {}).get(call["id"], {}).get("approved"):
             result = json.dumps(
                 {"status": "cancelled", "message": "Khach chua xac nhan nen don hang KHONG duoc tao."},
