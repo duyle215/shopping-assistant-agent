@@ -12,6 +12,7 @@ x-odoo: &odoo
     USER: odoo
     PASSWORD: ${ODOO_DB_PASSWORD:?set ODOO_DB_PASSWORD in .env}
     CHAT_APP_URL: ${CHAT_APP_URL:-http://localhost:5000}
+    ODOO_ADMIN_PASSWORD: ${ODOO_ADMIN_PASSWORD:-}
   volumes:
     - ./odoo/odoo.conf:/etc/odoo/odoo.conf:ro
     - ./odoo/addons:/mnt/extra-addons:ro

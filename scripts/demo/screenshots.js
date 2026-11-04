@@ -1,4 +1,5 @@
-// Playwright script for the README media. The app must run on http://localhost:5000.
+// Playwright script for the README media (chat page). The app must run on http://localhost:5000.
+// Screenshots of the Odoo side: scripts/demo/odoo.js
 //   npm install playwright && npx playwright install chromium
 //   node scripts/demo/screenshots.js docs/screenshots [vi|en] [compare|search|confirm|order|tabs]
 const { chromium } = require("playwright");
@@ -82,26 +83,6 @@ async function shootTab(browser, file, tabLabel, height, waitFor) {
   await ctx.close();
 }
 
-// Orders + support requests (the stock table above them is long)
-async function shootAdmin(browser) {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 700 }, deviceScaleFactor: 2 });
-  const page = await ctx.newPage();
-  await page.goto(URL);
-  await page.click(TAB("admin"));
-  await page.waitForFunction(
-    () => document.querySelectorAll("#ordersTable tr").length > 1 && document.querySelectorAll("#supportTable tr").length > 1,
-    null,
-    { timeout: 30000 },
-  );
-  // The 30-row stock table pushes orders and support requests out of view; hide it for this shot
-  await page.evaluate(() => {
-    document.querySelectorAll(".admin-section")[0].style.display = "none";
-  });
-  await page.waitForTimeout(500);
-  await page.screenshot({ path: path.join(OUT, "admin.png") });
-  await ctx.close();
-}
-
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch();
@@ -122,7 +103,6 @@ async function shootAdmin(browser) {
   if (!only || only === "tabs") {
     await shootTab(browser, "products.png", "products", 900,
       () => document.querySelectorAll(".product-card").length > 0);
-    await shootAdmin(browser);
     await shootTab(browser, "health.png", "health", 860,
       () => document.querySelectorAll("#traceSummary .stat").length > 0);
   }

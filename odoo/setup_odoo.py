@@ -5,6 +5,11 @@ import os
 db = os.environ["SETUP_DB"]
 secrets_dir = os.environ.get("SECRETS_DIR", "/secrets")
 app_url = os.environ.get("CHAT_APP_URL", "http://localhost:5000")
+admin_password = os.environ.get("ODOO_ADMIN_PASSWORD")
+
+# --- Staff login: a new database starts with admin / admin ---
+if admin_password:
+    env.ref("base.user_admin").password = admin_password
 
 # --- Company: Vietnamese shop, prices in VND ---
 vnd = env.ref("base.VND")
