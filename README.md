@@ -12,8 +12,8 @@ Works with any OpenAI-compatible provider. Tested with Google Gemini's free tier
 
 | What | Result | Details |
 | --- | --- | --- |
-| Conversation task success, against Odoo | **98%** (45/46) in one clean run; **100%** (46/46) after fixing the failure it found | [clean run](https://github.com/duyle215/shopping-assistant-agent/blob/b8d3bab/docs/agent_eval.md), [after the fix](docs/agent_eval.md) |
-| Answers grounded in tool data (LLM judge) | 98% (42/43) | same reports |
+| Conversation task success, against Odoo | **100%** (46/46) in one clean run, all scenarios on one commit; two earlier runs scored 45/46, each finding a bug that was then fixed | [report](docs/agent_eval.md), earlier runs: [1](https://github.com/duyle215/shopping-assistant-agent/blob/b8d3bab/docs/agent_eval.md) |
+| Answers grounded in tool data (LLM judge) | 95% (41/43); both flagged answers reuse data from an earlier turn, which the judge does not see | same report |
 | Spec extraction, field accuracy | **99.5%** (418/420) | [docs/extraction_eval.md](docs/extraction_eval.md) |
 | Search Hit@1, name / feature queries | 100% / 90% | [docs/search_eval.md](docs/search_eval.md) |
 | Prompt-injection attacks blocked | regex 17/20, LLM 19/20, both **20/20**; 0/15 benign messages blocked | [docs/guardrail_eval.md](docs/guardrail_eval.md) |
@@ -190,6 +190,7 @@ What the evaluation caught and what changed:
 | "I'll forward this to our staff" without opening a ticket | Claimed-action check covers forwarding phrases |
 | A poem request opened a support ticket | Off-topic requests are declined without a ticket |
 | "Samsung foldable" was searched as `gap` without diacritics and missed the Fold6 / Flip6 (first run on Odoo) | The search tool asks for the customer's words with Vietnamese diacritics |
+| "Compare the iPhone 15 with the Nokia 3310": the correct "we don't sell it" answer was sent back for a rewrite because 3310 is not in the table | Numbers the customer typed count as known in the number check |
 
 ### 8. Tracing
 
