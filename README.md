@@ -4,7 +4,9 @@ A Vietnamese phone-shopping assistant built on **LangGraph**. Two agents hand of
 
 Works with any OpenAI-compatible provider. Tested with OpenAI and with Google Gemini's free tier.
 
-![Three-way comparison: the table is built in code, the model only writes the commentary](docs/screenshots/chat-compare.png)
+![Demo: filtered search, comparison built in code, order confirmation, staff view](docs/demo.gif)
+
+*35-second demo, recorded with Playwright against the Docker build ([MP4](docs/demo.mp4)): filtered search, a comparison table built in code, the order confirmation card, and the new order in the staff view.*
 
 ## Results
 
@@ -45,6 +47,10 @@ Measured with `gemini-3.5-flash-lite` on a 30-phone catalog. The scenarios are w
 | Catalog (typed specs) | System tab: traces from the last 24 hours |
 | --- | --- |
 | ![Products](docs/screenshots/products.png) | ![System](docs/screenshots/health.png) |
+
+Three-way comparison: the table and the ✓ marks are computed in code, the model only writes the commentary.
+
+![Comparison](docs/screenshots/chat-compare.png)
 
 ## Architecture
 
@@ -246,6 +252,7 @@ Tools: `search_products`, `get_product`, `check_inventory`, `compare_products` (
 | `scripts/eval_agent.py` | Scripted conversations (+ `--judge`) → `docs/agent_eval.md` |
 | `scripts/eval_guardrails.py` | Regex (+ `--llm`) guardrail on attacks and benign messages → `docs/guardrail_eval.md` |
 | `scripts/crawl_pages.py` | Slow, polite crawler for real product pages |
+| `scripts/demo/*.js` | Playwright: README screenshots and the demo video (`ffmpeg` turns it into `docs/demo.gif`) |
 
 ### Crawling real pages
 

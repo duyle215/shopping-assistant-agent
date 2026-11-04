@@ -29,3 +29,6 @@ data/crawl_urls.txt
 
 # Local caches (eval embeddings)
 .cache/
+
+# Demo video working files
+docs/video/
