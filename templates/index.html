@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Shopping Assistant - Tư vấn điện thoại AI</title>
+    <title data-i18n="app.title">Shopping Assistant - Tư vấn điện thoại AI</title>
     <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
     <style>
       *,
@@ -663,6 +663,27 @@
       .tool-stats th:not(:first-child) {
         text-align: right;
       }
+      /* ── LANGUAGE SWITCH ── */
+      .lang-switch {
+        display: flex;
+        border: 1px solid #0f3460;
+        border-radius: 20px;
+        overflow: hidden;
+        margin-left: 12px;
+      }
+      .lang-switch button {
+        background: none;
+        border: none;
+        color: #aaa;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 3px 10px;
+        cursor: pointer;
+      }
+      .lang-switch button.active {
+        background: #e94560;
+        color: #fff;
+      }
     </style>
   </head>
   <body>
@@ -671,22 +692,20 @@
       <span class="logo">📱</span>
       <h1>Shopping Assistant</h1>
       <span class="badge">AI</span>
-      <span class="sub">Tư vấn điện thoại thông minh</span>
+      <span class="sub" data-i18n="app.subtitle">Tư vấn điện thoại thông minh</span>
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button data-lang="vi" onclick="setLang('vi')">VI</button>
+        <button data-lang="en" onclick="setLang('en')">EN</button>
+      </div>
     </header>
 
     <!-- TABS -->
     <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('chat')">
-        Chat AI
-      </button>
-      <button class="tab-btn" onclick="switchTab('products')">Sản phẩm</button>
-      <button class="tab-btn" onclick="switchTab('admin')">Quản lý</button>
-      <button class="tab-btn" onclick="switchTab('health')">Hệ thống</button>
-      <button
-        class="new-chat-btn"
-        onclick="newChat()"
-        title="Bắt đầu hội thoại mới"
-      >
+      <button class="tab-btn active" onclick="switchTab('chat')" data-i18n="tab.chat">Chat AI</button>
+      <button class="tab-btn" onclick="switchTab('products')" data-i18n="tab.products">Sản phẩm</button>
+      <button class="tab-btn" onclick="switchTab('admin')" data-i18n="tab.admin">Quản lý</button>
+      <button class="tab-btn" onclick="switchTab('health')" data-i18n="tab.health">Hệ thống</button>
+      <button class="new-chat-btn" onclick="newChat()" data-i18n="chat.new" data-i18n-title="chat.newTitle">
         + Hội thoại mới
       </button>
     </div>
@@ -697,18 +716,7 @@
         <div class="msg bot">
           <div class="avatar">🤖</div>
           <div>
-            <div class="bubble">
-              Xin chào! Mình là <strong>Shopping Assistant</strong>, trợ lý
-              tư vấn điện thoại.<br /><br />
-              Bạn có thể hỏi mình về:<br />
-              - Tìm điện thoại hợp nhu cầu và ngân sách<br />
-              - So sánh các mẫu máy<br />
-              - Tồn kho, đặt hàng, hoặc gặp nhân viên<br /><br />
-              <em
-                >Ví dụ: "Samsung dưới 10 triệu pin trâu?", "So sánh iPhone 16 Pro
-                và Galaxy S24 Ultra"</em
-              >
-            </div>
+            <div class="bubble" id="welcome" data-i18n-html="chat.welcome"></div>
           </div>
         </div>
       </div>
@@ -716,25 +724,23 @@
       <div class="input-bar">
         <textarea
           id="userInput"
-          placeholder="Hỏi về điện thoại bạn muốn mua..."
+          placeholder="Hỏi về điện thoại bạn muốn mua..." data-i18n-placeholder="chat.placeholder"
           rows="1"
           onkeydown="handleKey(event)"
           oninput="autoResize(this)"
         ></textarea>
-        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-          Gửi
-        </button>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()" data-i18n="chat.send">Gửi</button>
       </div>
     </div>
 
     <!-- PRODUCTS PANEL -->
     <div id="panel-products" class="tab-panel">
       <div class="products-header">
-        <h2>Danh sách sản phẩm</h2>
-        <button class="refresh-btn" onclick="loadProducts()">Tải lại</button>
+        <h2 data-i18n="products.title">Danh sách sản phẩm</h2>
+        <button class="refresh-btn" onclick="loadProducts()" data-i18n="common.reload">Tải lại</button>
       </div>
       <div class="products-grid" id="productsGrid">
-        <p style="color: #999; font-size: 0.9rem">Đang tải...</p>
+        <p style="color: #999; font-size: 0.9rem" data-i18n="common.loading">Đang tải...</p>
       </div>
     </div>
 
@@ -747,32 +753,32 @@
           align-items: center;
         "
       >
-        <h2 style="font-size: 1.1rem; font-weight: 600">
+        <h2 style="font-size: 1.1rem; font-weight: 600" data-i18n="admin.title">
           Quản lý kho hàng, đơn hàng & hỗ trợ
         </h2>
-        <button class="refresh-btn" onclick="loadAdmin()">Tải lại</button>
+        <button class="refresh-btn" onclick="loadAdmin()" data-i18n="common.reload">Tải lại</button>
       </div>
 
       <div class="admin-section">
-        <h2>Tồn kho <span id="stockCount" class="count-badge">0</span></h2>
+        <h2><span data-i18n="admin.stock">Tồn kho</span> <span id="stockCount" class="count-badge">0</span></h2>
         <div id="stockTable">
-          <p style="color: #999; font-size: 0.85rem">Đang tải...</p>
+          <p style="color: #999; font-size: 0.85rem" data-i18n="common.loading">Đang tải...</p>
         </div>
       </div>
 
       <div class="admin-section">
-        <h2>Đơn hàng <span id="ordersCount" class="count-badge">0</span></h2>
+        <h2><span data-i18n="admin.orders">Đơn hàng</span> <span id="ordersCount" class="count-badge">0</span></h2>
         <div id="ordersTable">
-          <p style="color: #999; font-size: 0.85rem">Chưa có đơn hàng.</p>
+          <p style="color: #999; font-size: 0.85rem" data-i18n="admin.noOrders">Chưa có đơn hàng.</p>
         </div>
       </div>
 
       <div class="admin-section">
         <h2>
-          Yêu cầu hỗ trợ <span id="supportCount" class="count-badge">0</span>
+          <span data-i18n="admin.support">Yêu cầu hỗ trợ</span> <span id="supportCount" class="count-badge">0</span>
         </h2>
         <div id="supportTable">
-          <p style="color: #999; font-size: 0.85rem">Chưa có yêu cầu.</p>
+          <p style="color: #999; font-size: 0.85rem" data-i18n="admin.noSupport">Chưa có yêu cầu.</p>
         </div>
       </div>
     </div>
@@ -780,23 +786,261 @@
     <!-- HEALTH PANEL -->
     <div id="panel-health" class="tab-panel">
       <div class="health-card">
-        <h2>Trạng thái hệ thống</h2>
+        <h2 data-i18n="health.status">Trạng thái hệ thống</h2>
         <div id="healthRows">
-          <div class="health-row"><span>Đang kiểm tra...</span></div>
+          <div class="health-row"><span data-i18n="health.checking">Đang kiểm tra...</span></div>
         </div>
       </div>
       <div class="health-card">
-        <h2>Hoạt động 24 giờ qua</h2>
+        <h2 data-i18n="health.activity">Hoạt động 24 giờ qua</h2>
         <div id="traceSummary">
-          <div class="health-row"><span>Đang tải...</span></div>
+          <div class="health-row"><span data-i18n="common.loading">Đang tải...</span></div>
         </div>
       </div>
-      <button class="health-refresh" onclick="loadHealth()">
-        Kiểm tra lại
-      </button>
+      <button class="health-refresh" onclick="loadHealth()" data-i18n="health.recheck">Kiểm tra lại</button>
     </div>
 
     <script>
+      // ── I18N ────────────────────────────────────────────────────
+      const I18N = {
+        vi: {
+          "app.title": "Shopping Assistant - Tư vấn điện thoại AI",
+          "app.subtitle": "Tư vấn điện thoại thông minh",
+          "tab.chat": "Chat AI",
+          "tab.products": "Sản phẩm",
+          "tab.admin": "Quản lý",
+          "tab.health": "Hệ thống",
+          "chat.new": "+ Hội thoại mới",
+          "chat.newTitle": "Bắt đầu hội thoại mới",
+          "chat.welcome":
+            'Xin chào! Mình là <strong>Shopping Assistant</strong>, trợ lý tư vấn điện thoại.<br /><br />' +
+            "Bạn có thể hỏi mình về:<br />- Tìm điện thoại hợp nhu cầu và ngân sách<br />- So sánh các mẫu máy<br />" +
+            '- Tồn kho, đặt hàng, hoặc gặp nhân viên<br /><br /><em>Ví dụ: "Samsung dưới 10 triệu pin trâu?", ' +
+            '"So sánh iPhone 16 Pro và Galaxy S24 Ultra"</em>',
+          "chat.placeholder": "Hỏi về điện thoại bạn muốn mua...",
+          "chat.send": "Gửi",
+          "chat.disconnected": "Kết nối bị ngắt giữa chừng.",
+          "tool.default": "Đang xử lý...",
+          "tool.search_products": "Đang tìm sản phẩm...",
+          "tool.get_product_details": "Đang xem thông số...",
+          "tool.compare_products": "Đang dựng bảng so sánh...",
+          "tool.check_inventory": "Đang kiểm tra tồn kho...",
+          "tool.place_order": "Đang tạo đơn hàng...",
+          "tool.save_customer_info": "Đang lưu thông tin liên hệ...",
+          "tool.request_human_support": "Đang chuyển cho nhân viên...",
+          "tool.transfer_to_compare_agent": "Chuyển sang chuyên gia so sánh...",
+          "tool.transfer_to_sales_agent": "Chuyển về tư vấn bán hàng...",
+          "confirm.title": "Xác nhận đơn hàng",
+          "confirm.product": "Sản phẩm",
+          "confirm.recipient": "Người nhận",
+          "confirm.yes": "Xác nhận đặt",
+          "confirm.no": "Huỷ",
+          "confirm.approved": "Bạn đã xác nhận đặt hàng.",
+          "confirm.rejected": "Bạn đã huỷ đơn hàng.",
+          "confirm.abandoned": "Đơn hàng chưa được xác nhận.",
+          "common.loading": "Đang tải...",
+          "common.reload": "Tải lại",
+          "common.error": "Lỗi",
+          "common.noServer": "Không thể kết nối đến server.",
+          "common.loadFailed": "Không thể tải dữ liệu.",
+          "products.title": "Danh sách sản phẩm",
+          "products.ask": "Hỏi về sản phẩm này",
+          "products.askText": "Cho mình biết chi tiết về {name}",
+          "spec.chip": "Chip",
+          "spec.ram": "RAM",
+          "spec.storage": "Bộ nhớ",
+          "spec.screen": "Màn hình",
+          "spec.battery": "Pin",
+          "spec.charging": "sạc",
+          "spec.camera": "Camera",
+          "stock.left": "Còn {n} chiếc",
+          "stock.low": "Chỉ còn {n}",
+          "stock.out": "Hết hàng",
+          "admin.title": "Quản lý kho hàng, đơn hàng & hỗ trợ",
+          "admin.stock": "Tồn kho",
+          "admin.orders": "Đơn hàng",
+          "admin.support": "Yêu cầu hỗ trợ",
+          "admin.noProducts": "Chưa có sản phẩm.",
+          "admin.noOrders": "Chưa có đơn hàng nào.",
+          "admin.noSupport": "Chưa có yêu cầu hỗ trợ nào.",
+          "admin.update": "Cập nhật",
+          "admin.stockFailed": "Lỗi tải tồn kho.",
+          "admin.ordersFailed": "Lỗi tải đơn hàng.",
+          "admin.supportFailed": "Lỗi tải yêu cầu hỗ trợ.",
+          "admin.badQty": "Số lượng phải là số nguyên >= 0",
+          "admin.updateFailed": "Không thể cập nhật tồn kho.",
+          "col.product": "Sản phẩm",
+          "col.brand": "Hãng",
+          "col.price": "Giá",
+          "col.stock": "Tồn kho",
+          "col.action": "Thao tác",
+          "col.qty": "SL",
+          "col.customer": "Khách hàng",
+          "col.phone": "SĐT",
+          "col.status": "Trạng thái",
+          "col.note": "Ghi chú",
+          "col.time": "Thời gian",
+          "col.reason": "Lý do",
+          "status.confirmed": "Đã xác nhận",
+          "status.restock": "Chờ nhập hàng",
+          "status.resolved": "Đã xử lý",
+          "status.pending": "Đang chờ",
+          "health.status": "Trạng thái hệ thống",
+          "health.activity": "Hoạt động 24 giờ qua",
+          "health.checking": "Đang kiểm tra...",
+          "health.recheck": "Kiểm tra lại",
+          "stats.turns": "Lượt chat",
+          "stats.latency": "Thời gian xử lý một lượt (TB / p95)",
+          "stats.llmCalls": "Lần gọi LLM · TB",
+          "stats.tokens": "Token vào / ra",
+          "stats.calls": "Lần gọi",
+          "stats.avg": "TB",
+          "stats.errors": "Lỗi",
+          "stats.noData": "Chưa có dữ liệu",
+          "stats.failed": "Không tải được thống kê.",
+        },
+        en: {
+          "app.title": "Shopping Assistant - AI phone advisor",
+          "app.subtitle": "AI phone shopping assistant",
+          "tab.chat": "AI Chat",
+          "tab.products": "Products",
+          "tab.admin": "Staff",
+          "tab.health": "System",
+          "chat.new": "+ New chat",
+          "chat.newTitle": "Start a new conversation",
+          "chat.welcome":
+            "Hi! I'm <strong>Shopping Assistant</strong>, your phone shopping advisor.<br /><br />" +
+            "You can ask me to:<br />- Find a phone for your needs and budget<br />- Compare models<br />" +
+            '- Check stock, place an order, or talk to our staff<br /><br /><em>Try: "Samsung under 10 million ' +
+            'with a big battery?", "Compare the iPhone 16 Pro and the Galaxy S24 Ultra"</em>',
+          "chat.placeholder": "Ask about the phone you want...",
+          "chat.send": "Send",
+          "chat.disconnected": "The connection dropped.",
+          "tool.default": "Working...",
+          "tool.search_products": "Searching products...",
+          "tool.get_product_details": "Reading the spec sheet...",
+          "tool.compare_products": "Building the comparison table...",
+          "tool.check_inventory": "Checking stock...",
+          "tool.place_order": "Creating the order...",
+          "tool.save_customer_info": "Saving your contact details...",
+          "tool.request_human_support": "Passing this to our staff...",
+          "tool.transfer_to_compare_agent": "Handing over to the comparison expert...",
+          "tool.transfer_to_sales_agent": "Handing back to the sales advisor...",
+          "confirm.title": "Confirm your order",
+          "confirm.product": "Product",
+          "confirm.recipient": "Recipient",
+          "confirm.yes": "Place order",
+          "confirm.no": "Cancel",
+          "confirm.approved": "You confirmed the order.",
+          "confirm.rejected": "You cancelled the order.",
+          "confirm.abandoned": "The order was not confirmed.",
+          "common.loading": "Loading...",
+          "common.reload": "Reload",
+          "common.error": "Error",
+          "common.noServer": "Cannot reach the server.",
+          "common.loadFailed": "Could not load the data.",
+          "products.title": "Products",
+          "products.ask": "Ask about this phone",
+          "products.askText": "Tell me more about the {name}",
+          "spec.chip": "Chip",
+          "spec.ram": "RAM",
+          "spec.storage": "Storage",
+          "spec.screen": "Screen",
+          "spec.battery": "Battery",
+          "spec.charging": "charging",
+          "spec.camera": "Camera",
+          "stock.left": "{n} in stock",
+          "stock.low": "Only {n} left",
+          "stock.out": "Out of stock",
+          "admin.title": "Stock, orders & support requests",
+          "admin.stock": "Stock",
+          "admin.orders": "Orders",
+          "admin.support": "Support requests",
+          "admin.noProducts": "No products yet.",
+          "admin.noOrders": "No orders yet.",
+          "admin.noSupport": "No support requests yet.",
+          "admin.update": "Update",
+          "admin.stockFailed": "Could not load stock.",
+          "admin.ordersFailed": "Could not load orders.",
+          "admin.supportFailed": "Could not load support requests.",
+          "admin.badQty": "Quantity must be a whole number >= 0",
+          "admin.updateFailed": "Could not update stock.",
+          "col.product": "Product",
+          "col.brand": "Brand",
+          "col.price": "Price",
+          "col.stock": "Stock",
+          "col.action": "Action",
+          "col.qty": "Qty",
+          "col.customer": "Customer",
+          "col.phone": "Phone",
+          "col.status": "Status",
+          "col.note": "Note",
+          "col.time": "Time",
+          "col.reason": "Reason",
+          "status.confirmed": "Confirmed",
+          "status.restock": "Awaiting restock",
+          "status.resolved": "Resolved",
+          "status.pending": "Pending",
+          "health.status": "System status",
+          "health.activity": "Last 24 hours",
+          "health.checking": "Checking...",
+          "health.recheck": "Check again",
+          "stats.turns": "Chat turns",
+          "stats.latency": "Processing time per turn (avg / p95)",
+          "stats.llmCalls": "LLM calls · avg",
+          "stats.tokens": "Tokens in / out",
+          "stats.calls": "Calls",
+          "stats.avg": "Avg",
+          "stats.errors": "Errors",
+          "stats.noData": "No data yet",
+          "stats.failed": "Could not load the statistics.",
+        },
+      };
+
+      // Ngon ngu: ?lang=en tren URL > lua chon da luu > tieng Viet
+      let lang = (() => {
+        const fromUrl = new URLSearchParams(location.search).get("lang");
+        let saved = null;
+        try {
+          saved = localStorage.getItem("lang");
+        } catch {}
+        const value = fromUrl || saved || "vi";
+        return I18N[value] ? value : "vi";
+      })();
+
+      function locale() {
+        return lang === "en" ? "en-US" : "vi-VN";
+      }
+
+      function t(key, vars, fallback) {
+        let text = (I18N[lang] && I18N[lang][key]) ?? I18N.vi[key] ?? fallback ?? key;
+        for (const [k, v] of Object.entries(vars || {})) text = text.replaceAll(`{${k}}`, v);
+        return text;
+      }
+
+      function applyI18n() {
+        document.documentElement.lang = lang;
+        document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = t(el.dataset.i18n)));
+        document.querySelectorAll("[data-i18n-html]").forEach((el) => (el.innerHTML = t(el.dataset.i18nHtml)));
+        document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => (el.placeholder = t(el.dataset.i18nPlaceholder)));
+        document.querySelectorAll("[data-i18n-title]").forEach((el) => (el.title = t(el.dataset.i18nTitle)));
+        document.querySelectorAll(".lang-switch button").forEach((b) => b.classList.toggle("active", b.dataset.lang === lang));
+      }
+
+      function setLang(value) {
+        if (!I18N[value] || value === lang) return;
+        lang = value;
+        try {
+          localStorage.setItem("lang", lang);
+        } catch {}
+        applyI18n();
+        const active = document.querySelector(".tab-panel.active");
+        if (active && active.id === "panel-products") loadProducts();
+        if (active && active.id === "panel-admin") loadAdmin();
+        if (active && active.id === "panel-health") loadHealth();
+      }
+
+      applyI18n();
       // ── SESSION MANAGEMENT ──────────────────────────────────────
       let sessionId = localStorage.getItem("session_id") || crypto.randomUUID();
       localStorage.setItem("session_id", sessionId);
@@ -882,17 +1126,7 @@
 
 
       // ── STREAMING CHAT ──────────────────────────────────────────
-      const TOOL_LABELS = {
-        search_products: "Đang tìm sản phẩm...",
-        get_product_details: "Đang xem thông số...",
-        compare_products: "Đang dựng bảng so sánh...",
-        check_inventory: "Đang kiểm tra tồn kho...",
-        place_order: "Đang tạo đơn hàng...",
-        save_customer_info: "Đang lưu thông tin liên hệ...",
-        request_human_support: "Đang chuyển cho nhân viên...",
-        transfer_to_compare_agent: "Chuyển sang chuyên gia so sánh...",
-        transfer_to_sales_agent: "Chuyển về tư vấn bán hàng...",
-      };
+
 
       // Doc SSE tu fetch POST; goi onEvent cho moi su kien JSON
       async function postStream(url, body, onEvent) {
@@ -935,7 +1169,7 @@
         return {
           div,
           tool(name) {
-            status.textContent = TOOL_LABELS[name] || "Đang xử lý...";
+            status.textContent = t("tool." + name, null, t("tool.default"));
             scroll();
           },
           token(text) {
@@ -950,7 +1184,7 @@
           final(data) {
             status.textContent = "";
             if (data.error) {
-              content.innerHTML = `<span style="color:#c62828">Lỗi: ${escapeHtml(data.error)}</span>`;
+              content.innerHTML = `<span style="color:#c62828">${t("common.error")}: ${escapeHtml(data.error)}</span>`;
               return;
             }
             content.innerHTML = marked.parse(data.answer_markdown || "");
@@ -967,7 +1201,7 @@
       }
 
       function vnd(n) {
-        return n == null ? "—" : Number(n).toLocaleString("vi-VN") + " ₫";
+        return n == null ? "—" : Number(n).toLocaleString(locale()) + " ₫";
       }
 
       // The xac nhan don hang (LangGraph interrupt) voi nut Xac nhan / Huy
@@ -975,23 +1209,23 @@
         const rows = (pending.orders || [])
           .map((o) => {
             const total = o.unit_price && o.quantity ? o.unit_price * o.quantity : null;
-            return `<tr><td>${escapeHtml(o.product_name || "Sản phẩm #" + o.product_id)} × ${o.quantity}</td><td>${vnd(total)}</td></tr>`
+            return `<tr><td>${escapeHtml(o.product_name || t("confirm.product") + " #" + o.product_id)} × ${o.quantity}</td><td>${vnd(total)}</td></tr>`
               + (o.customer_name || o.customer_phone
-                ? `<tr><td>Người nhận</td><td>${escapeHtml([o.customer_name, o.customer_phone].filter(Boolean).join(" · "))}</td></tr>`
+                ? `<tr><td>${t("confirm.recipient")}</td><td>${escapeHtml([o.customer_name, o.customer_phone].filter(Boolean).join(" · "))}</td></tr>`
                 : "");
           })
           .join("");
         const card = document.createElement("div");
         card.className = "confirm-card";
-        card.innerHTML = `<h4>Xác nhận đơn hàng</h4><table>${rows}</table>
-          <div class="confirm-actions"><button class="yes">Xác nhận đặt</button><button class="no">Huỷ</button></div>`;
+        card.innerHTML = `<h4>${t("confirm.title")}</h4><table>${rows}</table>
+          <div class="confirm-actions"><button class="yes">${t("confirm.yes")}</button><button class="no">${t("confirm.no")}</button></div>`;
         container.appendChild(card);
         const [yes, no] = card.querySelectorAll("button");
         const answer = async (approved) => {
           yes.disabled = no.disabled = true;
           card.querySelector(".confirm-actions").outerHTML =
-            `<div class="confirm-done">${approved ? "Bạn đã xác nhận đặt hàng." : "Bạn đã huỷ đơn hàng."}</div>`;
-          await runStream("/api/chat/confirm/stream", { session_id: sessionId, approved });
+            `<div class="confirm-done">${approved ? t("confirm.approved") : t("confirm.rejected")}</div>`;
+          await runStream("/api/chat/confirm/stream", { session_id: sessionId, approved, lang });
         };
         yes.onclick = () => answer(true);
         no.onclick = () => answer(false);
@@ -1019,9 +1253,9 @@
               bot.final({ error: ev.error });
             }
           });
-          if (!finished) bot.final({ error: "Kết nối bị ngắt giữa chừng." });
+          if (!finished) bot.final({ error: t("chat.disconnected") });
         } catch (err) {
-          bot.final({ error: "Không thể kết nối đến server." });
+          bot.final({ error: t("common.noServer") });
         } finally {
           btn.disabled = false;
           document.getElementById("userInput").focus();
@@ -1034,12 +1268,12 @@
         if (!text) return;
         // Dang cho xac nhan ma khach go tin moi: server se coi nhu huy don
         document.querySelectorAll(".confirm-actions").forEach((el) => {
-          el.outerHTML = '<div class="confirm-done">Đơn hàng chưa được xác nhận.</div>';
+          el.outerHTML = `<div class="confirm-done">${t("confirm.abandoned")}</div>`;
         });
         appendMsg("user", escapeHtml(text));
         input.value = "";
         input.style.height = "44px";
-        await runStream("/api/chat/stream", { message: text, session_id: sessionId });
+        await runStream("/api/chat/stream", { message: text, session_id: sessionId, lang });
       }
 
       function escapeHtml(str) {
@@ -1053,7 +1287,7 @@
       async function loadProducts() {
         const grid = document.getElementById("productsGrid");
         grid.innerHTML =
-          '<p style="color:#999;font-size:.9rem">Đang tải...</p>';
+          `<p style="color:#999;font-size:.9rem">${t("common.loading")}</p>`;
 
         try {
           const res = await fetch("/api/products");
@@ -1066,42 +1300,49 @@
 
           grid.innerHTML = "";
           (data.products || []).forEach((p) => {
-            const specsHtml = Object.entries(p.specs || {})
-              .map(([k, v]) => `<li><strong>${k}:</strong> ${v}</li>`)
-              .join("");
+            const storage = (p.storage_gb || []).map((x) => (x >= 1024 ? x / 1024 + "TB" : x + "GB")).join(" / ");
+            const specs = [
+              [t("spec.chip"), p.chipset],
+              [t("spec.ram"), p.ram_gb + " GB"],
+              [t("spec.storage"), storage],
+              [t("spec.screen"), `${p.screen_inch}" ${p.refresh_rate_hz}Hz`],
+              [t("spec.battery"), p.battery_mah + " mAh" + (p.charging_w ? `, ${t("spec.charging")} ${p.charging_w}W` : "")],
+              [t("spec.camera"), p.main_camera_mp + " MP"],
+            ];
+            const specsHtml = specs.map(([k, v]) => `<li><strong>${k}:</strong> ${v}</li>`).join("");
 
             const card = document.createElement("div");
             card.className = "product-card";
 
             let stockCls = "stock-ok";
-            let stockText = `Còn ${p.stock} chiếc`;
+            let stockText = t("stock.left", { n: p.stock });
             if (p.stock === 0) {
               stockCls = "stock-out";
-              stockText = "Hết hàng";
+              stockText = t("stock.out");
             } else if (p.stock <= 5) {
               stockCls = "stock-low";
-              stockText = `Chỉ còn ${p.stock}`;
+              stockText = t("stock.low", { n: p.stock });
             }
 
             card.innerHTML = `
         <span class="brand-badge">${p.brand}</span>
         <span class="stock-badge ${stockCls}">${stockText}</span>
         <h3>${p.name}</h3>
-        <div class="price">${Number(p.price).toLocaleString("vi-VN")} VND</div>
+        <div class="price">${Number(p.price).toLocaleString(locale())} ₫</div>
         <ul class="specs">${specsHtml}</ul>
-        <button class="ask-btn" onclick="askAbout('${p.name}')">Hỏi về sản phẩm này</button>
+        <button class="ask-btn" onclick="askAbout('${p.name}')">${t("products.ask")}</button>
       `;
             grid.appendChild(card);
           });
         } catch {
-          grid.innerHTML = '<p style="color:red">Không thể tải dữ liệu.</p>';
+          grid.innerHTML = `<p style="color:red">${t("common.loadFailed")}</p>`;
         }
       }
 
       function askAbout(name) {
         switchTab("chat");
         document.getElementById("userInput").value =
-          `Cho mình biết chi tiết về ${name}`;
+          t("products.askText", { name });
         document.getElementById("userInput").focus();
       }
 
@@ -1116,11 +1357,11 @@
 
           if (!sData.stock || sData.stock.length === 0) {
             sEl.innerHTML =
-              '<p style="color:#999;font-size:.85rem">Chưa có sản phẩm.</p>';
+              `<p style="color:#999;font-size:.85rem">${t("admin.noProducts")}</p>`;
           } else {
             let html = '<table class="admin-table"><thead><tr>';
             html +=
-              "<th>ID</th><th>Sản phẩm</th><th>Hãng</th><th>Giá</th><th>Tồn kho</th><th>Thao tác</th>";
+              `<th>ID</th><th>${t("col.product")}</th><th>${t("col.brand")}</th><th>${t("col.price")}</th><th>${t("col.stock")}</th><th>${t("col.action")}</th>`;
             html += "</tr></thead><tbody>";
             sData.stock.forEach((s) => {
               const cls =
@@ -1139,7 +1380,7 @@
                   <input type="number" id="stock-input-${s.product_id}" value="${s.stock}"
                     min="0" style="width:60px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;text-align:center">
                   <button class="refresh-btn" style="font-size:.75rem;padding:3px 8px;margin-left:4px"
-                    onclick="updateStock(${s.product_id})">Cập nhật</button>
+                    onclick="updateStock(${s.product_id})">${t("admin.update")}</button>
                 </td>
               </tr>`;
             });
@@ -1148,7 +1389,7 @@
           }
         } catch {
           document.getElementById("stockTable").innerHTML =
-            '<p style="color:red">Lỗi tải tồn kho.</p>';
+            `<p style="color:red">${t("admin.stockFailed")}</p>`;
         }
 
         // Load orders
@@ -1160,11 +1401,11 @@
 
           if (!data.orders || data.orders.length === 0) {
             el.innerHTML =
-              '<p style="color:#999;font-size:.85rem">Chưa có đơn hàng nào.</p>';
+              `<p style="color:#999;font-size:.85rem">${t("admin.noOrders")}</p>`;
           } else {
             let html = '<table class="admin-table"><thead><tr>';
             html +=
-              "<th>ID</th><th>Sản phẩm</th><th>SL</th><th>Khách hàng</th><th>SĐT</th><th>Trạng thái</th><th>Ghi chú</th><th>Thời gian</th>";
+              `<th>ID</th><th>${t("col.product")}</th><th>${t("col.qty")}</th><th>${t("col.customer")}</th><th>${t("col.phone")}</th><th>${t("col.status")}</th><th>${t("col.note")}</th><th>${t("col.time")}</th>`;
             html += "</tr></thead><tbody>";
             data.orders.forEach((o) => {
               const stCls =
@@ -1172,7 +1413,7 @@
                   ? "status-confirmed"
                   : "status-pending";
               const stLabel =
-                o.status === "confirmed" ? "Đã xác nhận" : "Chờ nhập hàng";
+                o.status === "confirmed" ? t("status.confirmed") : t("status.restock");
               html += `<tr>
                 <td>${o.id}</td>
                 <td>${o.product_name}</td>
@@ -1189,7 +1430,7 @@
           }
         } catch {
           document.getElementById("ordersTable").innerHTML =
-            '<p style="color:red">Lỗi tải đơn hàng.</p>';
+            `<p style="color:red">${t("admin.ordersFailed")}</p>`;
         }
 
         // Load support requests
@@ -1201,16 +1442,16 @@
 
           if (!data.requests || data.requests.length === 0) {
             el.innerHTML =
-              '<p style="color:#999;font-size:.85rem">Chưa có yêu cầu hỗ trợ nào.</p>';
+              `<p style="color:#999;font-size:.85rem">${t("admin.noSupport")}</p>`;
           } else {
             let html = '<table class="admin-table"><thead><tr>';
             html +=
-              "<th>ID</th><th>Lý do</th><th>Khách hàng</th><th>SĐT</th><th>Trạng thái</th><th>Thời gian</th>";
+              `<th>ID</th><th>${t("col.reason")}</th><th>${t("col.customer")}</th><th>${t("col.phone")}</th><th>${t("col.status")}</th><th>${t("col.time")}</th>`;
             html += "</tr></thead><tbody>";
             data.requests.forEach((r) => {
               const stCls =
                 r.status === "resolved" ? "status-confirmed" : "status-pending";
-              const stLabel = r.status === "resolved" ? "Đã xử lý" : "Đang chờ";
+              const stLabel = r.status === "resolved" ? t("status.resolved") : t("status.pending");
               html += `<tr>
                 <td>${r.id}</td>
                 <td style="max-width:300px">${r.reason}</td>
@@ -1225,7 +1466,7 @@
           }
         } catch {
           document.getElementById("supportTable").innerHTML =
-            '<p style="color:red">Lỗi tải yêu cầu hỗ trợ.</p>';
+            `<p style="color:red">${t("admin.supportFailed")}</p>`;
         }
       }
 
@@ -1233,7 +1474,7 @@
         const input = document.getElementById(`stock-input-${productId}`);
         const newStock = parseInt(input.value, 10);
         if (isNaN(newStock) || newStock < 0) {
-          alert("Số lượng phải là số nguyên >= 0");
+          alert(t("admin.badQty"));
           return;
         }
         try {
@@ -1244,14 +1485,14 @@
           });
           const data = await res.json();
           if (data.error) {
-            alert("Lỗi: " + data.error);
+            alert(t("common.error") + ": " + data.error);
           } else {
             alert(data.message);
             loadAdmin();
             loadProducts();
           }
         } catch {
-          alert("Không thể cập nhật tồn kho.");
+          alert(t("admin.updateFailed"));
         }
       }
 
@@ -1259,7 +1500,7 @@
       async function loadHealth() {
         const rows = document.getElementById("healthRows");
         rows.innerHTML =
-          '<div class="health-row"><span>Đang kiểm tra...</span></div>';
+          `<div class="health-row"><span>${t("health.checking")}</span></div>`;
 
         try {
           const res = await fetch("/api/health");
@@ -1281,7 +1522,7 @@
             .join("");
         } catch {
           rows.innerHTML =
-            '<div class="health-row"><span style="color:red">Không thể kết nối server.</span></div>';
+            `<div class="health-row"><span style="color:red">${t("common.noServer")}</span></div>`;
         }
         loadTraceSummary();
       }
@@ -1291,19 +1532,19 @@
         try {
           const d = await (await fetch("/api/traces/summary")).json();
           const ms = (v) => (v == null ? "—" : v >= 1000 ? (v / 1000).toFixed(1) + " s" : v + " ms");
-          const num = (v) => Number(v || 0).toLocaleString("vi-VN");
+          const num = (v) => Number(v || 0).toLocaleString(locale());
           const tools = (d.tools || [])
             .map((t) => `<tr><td>${t.name}</td><td>${t.calls}</td><td>${ms(t.avg_ms)}</td><td>${t.errors}</td></tr>`)
             .join("");
           el.innerHTML = `<div class="stats-grid">
-              <div class="stat"><div class="v">${num(d.turns.count)}</div><div class="k">Lượt chat</div></div>
-              <div class="stat"><div class="v">${ms(d.turns.avg_ms)} / ${ms(d.turns.p95_ms)}</div><div class="k">Thời gian xử lý một lượt (TB / p95)</div></div>
-              <div class="stat"><div class="v">${num(d.llm.calls)}</div><div class="k">Lần gọi LLM · TB ${ms(d.llm.avg_ms)}</div></div>
-              <div class="stat"><div class="v">${num(d.llm.prompt_tokens)} / ${num(d.llm.completion_tokens)}</div><div class="k">Token vào / ra</div></div>
+              <div class="stat"><div class="v">${num(d.turns.count)}</div><div class="k">${t("stats.turns")}</div></div>
+              <div class="stat"><div class="v">${ms(d.turns.avg_ms)} / ${ms(d.turns.p95_ms)}</div><div class="k">${t("stats.latency")}</div></div>
+              <div class="stat"><div class="v">${num(d.llm.calls)}</div><div class="k">${t("stats.llmCalls")} ${ms(d.llm.avg_ms)}</div></div>
+              <div class="stat"><div class="v">${num(d.llm.prompt_tokens)} / ${num(d.llm.completion_tokens)}</div><div class="k">${t("stats.tokens")}</div></div>
             </div>
-            <table class="tool-stats"><tr><th>Tool</th><th>Lần gọi</th><th>TB</th><th>Lỗi</th></tr>${tools || '<tr><td colspan="4">Chưa có dữ liệu</td></tr>'}</table>`;
+            <table class="tool-stats"><tr><th>Tool</th><th>${t("stats.calls")}</th><th>${t("stats.avg")}</th><th>${t("stats.errors")}</th></tr>${tools || `<tr><td colspan="4">${t("stats.noData")}</td></tr>`}</table>`;
         } catch {
-          el.innerHTML = '<div class="health-row"><span style="color:red">Không tải được thống kê.</span></div>';
+          el.innerHTML = `<div class="health-row"><span style="color:red">${t("stats.failed")}</span></div>`;
         }
       }
     </script>

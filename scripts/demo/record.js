@@ -1,12 +1,17 @@
 // Playwright script for the README media. The app must run on http://localhost:5000.
 //   npm install playwright && npx playwright install chromium
-//   node scripts/demo/record.js docs/video
+//   node scripts/demo/record.js docs/video [vi|en]
 // GIF for the README (palette per video keeps text sharp):
 //   ffmpeg -i docs/video/demo.webm -vf "fps=10,scale=960:-1:flags=lanczos,palettegen=stats_mode=diff" pal.png
 //   ffmpeg -i docs/video/demo.webm -i pal.png -lavfi "fps=10,scale=960:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" docs/demo.gif
 const { chromium } = require("playwright");
 const fs = require("fs"), path = require("path");
 const OUT = process.argv[2];
+const LANG = process.argv[3] === "en" ? "en" : "vi";
+const Q = {
+  vi: ["Samsung dưới 10 triệu pin trâu", "So sánh giúp mình Galaxy A55 và A35", "Lấy 1 chiếc A55 nhé, tên Minh, số 0901234567"],
+  en: ["Samsung under 10 million with a big battery", "Compare the Galaxy A55 and A35 for me", "I'll take one A55, name Minh, phone 0901234567"],
+}[LANG];
 // Optional local copy of marked.js (only needed where the CDN is blocked)
 const MARKED_FILE = path.join(__dirname, "package/marked.min.js");
 const MARKED = fs.existsSync(MARKED_FILE) ? fs.readFileSync(MARKED_FILE, "utf8") : null;
@@ -32,17 +37,17 @@ async function ask(page, text) {
   const ctx = await browser.newContext({ viewport: SIZE, recordVideo: { dir: OUT, size: SIZE } });
   const page = await ctx.newPage();
   if (MARKED) await page.route("**/marked*.js", (r) => r.fulfill({ body: MARKED, contentType: "application/javascript" }));
-  await page.goto("http://localhost:5000");
+  await page.goto(`http://localhost:5000/?lang=${LANG}`);
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForTimeout(1200);
 
-  await ask(page, "Samsung dưới 10 triệu pin trâu");
-  await ask(page, "So sánh giúp mình Galaxy A55 và A35");
+  await ask(page, Q[0]);
+  await ask(page, Q[1]);
   // order -> confirmation card
   const before = await page.locator(".msg.bot .meta").count();
   await page.click("#userInput");
-  await page.keyboard.type("Lấy 1 chiếc A55 nhé, tên Minh, số 0901234567", { delay: 35 });
+  await page.keyboard.type(Q[2], { delay: 35 });
   await page.click("#sendBtn");
   await page.waitForSelector(".confirm-actions .yes", { timeout: 240000 });
   await page.waitForTimeout(1500);
@@ -53,7 +58,7 @@ async function ask(page, text) {
   await page.waitForTimeout(2500);
 
   // staff view: the new order
-  await page.click('.tab-btn:has-text("Quản lý")');
+  await page.click(`.tab-btn[onclick*="'admin'"]`);
   await page.waitForFunction(() => document.querySelectorAll("#ordersTable tr").length > 1, null, { timeout: 30000 });
   await page.evaluate(() => document.getElementById("ordersTable").scrollIntoView({ behavior: "smooth" }));
   await page.waitForTimeout(3000);
@@ -61,7 +66,7 @@ async function ask(page, text) {
   const video = page.video();
   await ctx.close();
   const file = await video.path();
-  fs.renameSync(file, path.join(OUT, "demo.webm"));
+  fs.renameSync(file, path.join(OUT, `demo-${LANG}.webm`));
   await browser.close();
-  console.log("saved", path.join(OUT, "demo.webm"));
+  console.log("saved", path.join(OUT, `demo-${LANG}.webm`));
 })().catch((e) => { console.error(e); process.exit(1); });

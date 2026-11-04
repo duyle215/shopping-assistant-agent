@@ -103,7 +103,7 @@ def rule_ok(actual, rule) -> bool:
 
 
 _PRICE_DOTTED = re.compile(r"(?<![\d.,])\d{1,3}(?:[.,]\d{3}){2,}(?![\d])")
-_PRICE_MILLION = re.compile(r"(?<![\d.,])(\d+(?:[.,]\d+)?)\s*(?:triệu|trieu)", re.IGNORECASE)
+_PRICE_MILLION = re.compile(r"(?<![\d.,])(\d+(?:[.,]\d+)?)\s*(?:triệu|trieu|million)", re.IGNORECASE)
 
 
 def prices_in(answer: str) -> set[int]:
@@ -180,6 +180,11 @@ def check_turn(turn: dict, resp, calls, had_pending: bool, allowed: set[int]) ->
             fails.append(f"answer contains '{s}'")
     if turn.get("pending_confirmation") and not had_pending:
         fails.append("no order confirmation shown")
+    if turn.get("english"):
+        # Chu co dau tieng Viet (khong tinh ten san pham): qua 5 ky tu -> dang tra loi tieng Viet
+        vietnamese = re.findall(r"[ăâđêôơưàáạảãằắặẳẵầấậẩẫèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ]", low)
+        if len(vietnamese) > 5:
+            fails.append(f"answer is not in English ({len(vietnamese)} Vietnamese characters)")
     bad_prices = sorted(prices_in(answer) - allowed)
     if bad_prices:
         fails.append(f"prices not in catalog: {bad_prices}")
@@ -311,7 +316,7 @@ def main() -> None:
             verdict = None
             try:
                 for i, turn in enumerate(sc["turns"], start=1):
-                    resp = agent.run(turn["user"], session)
+                    resp = agent.run(turn["user"], session, lang=sc.get("lang", "vi"))
                     had_pending = resp.pending_confirmation is not None
                     if had_pending and turn.get("confirm"):
                         resp = agent.confirm(session, turn["confirm"] == "approve")
