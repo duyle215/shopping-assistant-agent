@@ -70,6 +70,20 @@ COMPARE_SYSTEM = (
 )
 
 
+# Cau hoi lai sau khi so sanh (rule 8 cua CompareAgent), theo ngon ngu khach
+FOLLOW_UP: dict[str, str] = {
+    "vi": "Bạn có muốn nhân viên tư vấn thêm chi tiết hoặc hỗ trợ đặt hàng không?",
+    "en": "Would you like a staff member to advise you further, or help you place an order?",
+}
+
+
+def localize(system_prompt: str, lang: str) -> str:
+    """Thay cau mau tieng Viet trong prompt bang ban dung ngon ngu, them ghi chu ngon ngu."""
+    return system_prompt.replace(FOLLOW_UP["vi"], FOLLOW_UP.get(lang, FOLLOW_UP["vi"])) + LANGUAGE_NOTES.get(
+        lang, LANGUAGE_NOTES["vi"]
+    )
+
+
 # Them vao cuoi system prompt theo ngon ngu khach chon tren giao dien
 LANGUAGE_NOTES: dict[str, str] = {
     "vi": "\n\nNGON NGU: Tieng Viet tu nhien, co dau.",

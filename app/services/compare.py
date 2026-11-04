@@ -14,8 +14,10 @@ from typing import Callable, Optional
 from app.agent.schemas import ProductMetadata
 
 
-def _vnd(v: int) -> str:
-    return f"{v:,}".replace(",", ".") + " ₫"
+def _vnd(v: int, lang: str = "vi") -> str:
+    """9.490.000 ₫ (vi) / 9,490,000 ₫ (en)."""
+    text = f"{v:,}"
+    return (text if lang == "en" else text.replace(",", ".")) + " ₫"
 
 
 def _storage(v: list[int]) -> str:
@@ -97,7 +99,12 @@ def build_comparison(
 
         cells = []
         for i, v in enumerate(values):
-            cell = "—" if v is None else aspect.fmt(v)
+            if v is None:
+                cell = "—"
+            elif aspect.key == "price":
+                cell = _vnd(v, lang)
+            else:
+                cell = aspect.fmt(v)
             cells.append(f"**{cell}** ✓" if i in best_idx else cell)
         rows.append(f"| {aspect.name(lang)} | " + " | ".join(cells) + " |")
 

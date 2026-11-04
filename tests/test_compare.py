@@ -92,3 +92,9 @@ def test_english_table_labels():
 def test_million_written_in_english_counts_as_the_price():
     table = "| Price | 22.990.000 ₫ |"
     assert unsupported_numbers("It costs 22.99 million VND.", [table]) == []
+
+
+def test_english_table_uses_english_number_format():
+    result = build_comparison([_phone(1, "A", price=9_490_000), _phone(2, "B")], lang="en")
+    assert "9,490,000 ₫" in result["table_markdown"]
+    assert "9.490.000" not in result["table_markdown"]

@@ -28,7 +28,7 @@ from langgraph.types import interrupt
 
 from app import tracing
 from app.agent import llm
-from app.agent.prompts import HANDOFF_MAP, LANGUAGE_NOTES, build_agent_configs
+from app.agent.prompts import HANDOFF_MAP, build_agent_configs, localize
 from app.agent.tools import TOOL_DEFS, TOOL_DISPATCH
 from app.config import GUARD_MODEL, MAX_ITERATIONS
 from app.guardrails import check_input, check_input_llm, check_output, unbacked_action_claims
@@ -140,7 +140,7 @@ def _last_tool_calls(turn: list[dict]) -> list[dict]:
 
 def _llm_messages(state: State) -> list[dict]:
     cfg = AGENT_CONFIGS[state.get("agent") or "sales"]
-    system = cfg.system_prompt + LANGUAGE_NOTES[_lang(state)]
+    system = localize(cfg.system_prompt, _lang(state))
     return [{"role": "system", "content": system}, *state.get("transcript", []), *state["turn"]]
 
 
