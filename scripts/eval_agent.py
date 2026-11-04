@@ -16,6 +16,7 @@ Vector nam o collection Qdrant rieng (product_knowledge_eval). Traces o Postgres
     python scripts/eval_agent.py --only order-confirmed compare-a55-a35
     python scripts/eval_agent.py --judge               # them LLM giam khao (ton them quota)
     python scripts/eval_agent.py --judge --resume      # chay tiep lan truoc bi ngat (cung commit, model)
+    python scripts/eval_agent.py --workers 6           # so luong song song (mac dinh 4)
 
 Moi kich ban xong duoc ghi ngay vao .cache/agent_eval_progress.jsonl. Het quota thi dung lai,
 khong ghi kich ban dang do; --resume bo qua cac kich ban da xong cua cung commit + model + giam khao.
@@ -365,6 +366,8 @@ def main() -> None:
         help="Ghi de ket qua cac kich ban vua chay vao lan chay day du truoc (.cache) roi viet lai bao cao",
     )
     parser.add_argument("--sleep", type=float, default=4.0, help="Nghi giua cac kich ban (giay)")
+    parser.add_argument("--workers", type=int, default=4, help="So luong chay song song (kich ban khong dung Odoo)")
+    parser.add_argument("--retry-wait", type=float, default=20.0, help="Cho truoc khi chay lai sau loi tam thoi")
     parser.add_argument(
         "--resume", action="store_true", help="Bo qua kich ban da xong o lan chay truoc (cung commit, model, giam khao)"
     )
@@ -392,7 +395,6 @@ def main() -> None:
     translate_ids(scenarios, catalog)
     create_tables(get_engine())
     allowed = allowed_prices(catalog)
-    agent = ShoppingAgent(checkpointer=MemorySaver())
     judge_model = args.judge_model or LLM_MODEL
 
     commit = current_commit()
@@ -410,10 +412,27 @@ def main() -> None:
         + "\n"
     )
 
-    stopped = False
-    for sc in todo:
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    lock = threading.Lock()
+    stop = threading.Event()
+    errors = {"consecutive": 0}
+    local = threading.local()
+
+    def worker_agent():
+        # Moi luong mot agent (graph + checkpointer rieng)
+        if not hasattr(local, "agent"):
+            local.agent = ShoppingAgent(checkpointer=MemorySaver())
+        return local.agent
+
+    def run_scenario(sc: dict, reset: bool) -> None:
+        if stop.is_set():
+            return
+        agent = worker_agent()
         for attempt in (1, 2):
-            reset_state(catalog)
+            if reset:
+                reset_state(catalog)
             session = f"eval-{sc['id']}-{uuid.uuid4().hex[:6]}"
             fails: list[str] = []
             answers: list[str] = []
@@ -440,21 +459,21 @@ def main() -> None:
                     )
                     convo += f"\nCustomer: {sc['turns'][-1]['user']}"
                     verdict = judge(convo, all_outputs, resp.answer_markdown, judge_model)
-                consecutive_errors = 0
+                with lock:
+                    errors["consecutive"] = 0
             except OutOfQuota as exc:
                 print(f"  ...  {sc['id']}: het quota ({str(exc)[:120]}). Dung; chay lai voi --resume.")
-                stopped = True
-                break
+                stop.set()
+                return
             except Exception as exc:
                 transient = any(k in type(exc).__name__ for k in ("RateLimit", "InternalServer", "Quota"))
                 if attempt == 1 and transient:
-                    print(f"  ...  {sc['id']}: loi tam thoi ({type(exc).__name__}), cho 60s roi chay lai")
-                    time.sleep(60)
+                    print(f"  ...  {sc['id']}: loi tam thoi ({type(exc).__name__}), cho {args.retry_wait:.0f}s roi chay lai")
+                    time.sleep(args.retry_wait)
                     continue
-                consecutive_errors += 1
+                with lock:
+                    errors["consecutive"] += 1
                 fails.append(f"error: {type(exc).__name__}: {str(exc)[:200]}")
-            break
-        if stopped:
             break
 
         with get_engine().connect() as conn:
@@ -469,35 +488,54 @@ def main() -> None:
             ).one()
 
         passed = not fails
-        results.append(
-            {
-                "id": sc["id"],
-                "category": sc["category"],
-                "passed": passed,
-                "fails": fails,
-                "judge": verdict,
-                "answers": answers,
-                "commit": commit,
-                "turns": len(sc["turns"]),
-                "llm_calls": usage.calls,
-                "prompt_tokens": int(usage.pt),
-                "completion_tokens": int(usage.ct),
-                "latency_ms": int(usage.turn_ms),
-            }
-        )
-        # Loi tam thoi cua API (khong phai loi cua agent): khong luu, --resume se chay lai
-        if not any(f.startswith("error:") for f in fails):
-            save_progress(key, results[-1])
+        result = {
+            "id": sc["id"],
+            "category": sc["category"],
+            "passed": passed,
+            "fails": fails,
+            "judge": verdict,
+            "answers": answers,
+            "commit": commit,
+            "turns": len(sc["turns"]),
+            "llm_calls": usage.calls,
+            "prompt_tokens": int(usage.pt),
+            "completion_tokens": int(usage.ct),
+            "latency_ms": int(usage.turn_ms),
+        }
         mark = "PASS" if passed else "FAIL"
         extra = "" if verdict is None else f"  judge: grounded={verdict['grounded']} helpful={verdict['helpful']}"
-        print(f"  {mark}  {sc['id']}{extra}")
-        for f in fails:
-            print(f"        - {f}")
-
-        if consecutive_errors >= 3:
-            print("\nDung som: 3 kich ban lien tiep loi (co the het quota API).")
-            break
+        with lock:
+            results.append(result)
+            # Loi tam thoi cua API (khong phai loi cua agent): khong luu, --resume se chay lai
+            if not any(f.startswith("error:") for f in fails):
+                save_progress(key, result)
+            print(f"  {mark}  {sc['id']}{extra}")
+            for f in fails:
+                print(f"        - {f}")
+            if errors["consecutive"] >= 3:
+                print("\nDung som: 3 kich ban lien tiep loi (co the het quota API).")
+                stop.set()
         time.sleep(args.sleep)
+
+    # Kich ban khong dat hang va khong kiem tra Odoo chay song song. Kich ban co kiem tra Odoo
+    # (don, ton kho, yeu cau ho tro) chay tuan tu: moi kich ban reset don va ton kho dung chung.
+    def touches_shop(sc: dict) -> bool:
+        return bool(sc.get("db")) or any(
+            "place_order" in (t.get("tools") or []) or t.get("confirm") or t.get("pending_confirmation")
+            for t in sc["turns"]
+        )
+
+    parallel = [sc for sc in todo if not touches_shop(sc)]
+    serial = [sc for sc in todo if touches_shop(sc)]
+    if parallel:
+        reset_state(catalog)
+        print(f"Song song ({args.workers} luong): {len(parallel)} kich ban")
+        with ThreadPoolExecutor(max_workers=args.workers) as pool:
+            list(pool.map(lambda sc: run_scenario(sc, reset=False), parallel))
+    if serial:
+        print(f"Tuan tu (dat hang / kiem tra Odoo): {len(serial)} kich ban")
+        for sc in serial:
+            run_scenario(sc, reset=True)
 
     if len(results) < len(scenarios):
         print(
@@ -527,8 +565,10 @@ def current_commit() -> str:
     import subprocess
 
     try:
+        # Commit cuoi cung sua code duoc danh gia (agent + addon), khong phai HEAD:
+        # sua script danh gia khong lam doi ket qua nen khong can chay lai
         commit = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True
+            ["git", "log", "-1", "--format=%h", "--", "app", "odoo/addons"], cwd=ROOT, capture_output=True, text=True
         ).stdout.strip()
         dirty = subprocess.run(
             ["git", "status", "--porcelain", "--", "app", "odoo/addons"], cwd=ROOT, capture_output=True, text=True
