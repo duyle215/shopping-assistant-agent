@@ -1,303 +1,129 @@
 """
-Inventory service - Quan ly ton kho va dat hang (MCP Inventory).
+Inventory service - ton kho va dat hang qua Odoo.
 
-Cung cap cac ham:
-  - check_inventory:            Kiem tra so luong ton kho.
-  - place_order:                Tao don dat hang.
-  - save_customer_info_to_order: Cap nhat thong tin khach vao don pending.
-  - get_all_stock:              Xem ton kho toan bo.
-  - get_pending_orders:         Xem danh sach don hang.
+  - check_inventory:             so luong con ban duoc (free_qty: ton kho tru hang da giu cho don).
+  - place_order:                 tao don ban (sale.order) qua method chat_place_order cua addon:
+                                 du hang thi xac nhan don (Odoo giu hang cho phieu giao),
+                                 thieu hang thi de bao gia cho nhan vien xu ly khi hang ve.
+  - save_customer_info_to_order: gan ten + SDT vao bao gia dang cho cua phien chat.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import Optional
 
-from sqlalchemy import text
-
-from app.db import get_engine
+from app.odoo import OdooError, get_odoo
+from app.services.product import BASE_DOMAIN
 
 logger = logging.getLogger("inventory")
 
+LOW_STOCK = 5
 
-# ------------------------------------------------------------------
-# INVENTORY
-# ------------------------------------------------------------------
+
+def stock_status(stock: int) -> str:
+    if stock <= 0:
+        return "out_of_stock"
+    return "low_stock" if stock <= LOW_STOCK else "in_stock"
+
+
 def check_inventory(product_id: int) -> dict:
     """Kiem tra ton kho cua san pham theo ID."""
-    engine = get_engine()
-    with engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT id, name, brand, price, stock FROM products WHERE id = :pid"),
-            {"pid": product_id},
-        ).fetchone()
-
-    if not row:
+    rows = get_odoo().search_read(
+        "product.template",
+        [("id", "=", int(product_id)), *BASE_DOMAIN],
+        ["id", "name", "phone_brand", "list_price", "chat_free_qty"],
+    )
+    if not rows:
         return {"error": f"Khong tim thay san pham co ID = {product_id}"}
-
-    stock = int(row.stock)
-    if stock == 0:
-        status = "out_of_stock"
-    elif stock <= 5:
-        status = "low_stock"
-    else:
-        status = "in_stock"
-
+    r = rows[0]
+    stock = int(r["chat_free_qty"])
     return {
-        "product_id": row.id,
-        "name": row.name,
-        "brand": row.brand,
-        "price": float(row.price),
+        "product_id": r["id"],
+        "name": r["name"],
+        "brand": r["phone_brand"] or "",
+        "price": float(r["list_price"]),
         "stock": stock,
-        "status": status,
+        "status": stock_status(stock),
     }
 
 
 def place_order(
     product_id: int,
     quantity: int,
-    customer_name: Optional[str] = None,
-    customer_phone: Optional[str] = None,
-) -> dict:
-    """Dat hang san pham.
-
-    - Neu du hang: tru stock, tao don thanh cong.
-    - Neu khong du: tao don pending + restock request.
-    """
-    if quantity <= 0:
-        return {"error": "So luong dat hang phai lon hon 0."}
-
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    # engine.begin(): mot transaction, tu commit khi xong, rollback khi loi.
-    # FOR UPDATE khoa dong san pham: hai don dat cung luc phai doi nhau,
-    # nen khong the cung doc stock cu roi cung tru (ban vuot ton kho).
-    with get_engine().begin() as conn:
-        row = conn.execute(
-            text(
-                "SELECT id, name, brand, stock FROM products "
-                "WHERE id = :pid FOR UPDATE"
-            ),
-            {"pid": product_id},
-        ).fetchone()
-
-        if not row:
-            return {"error": f"Khong tim thay san pham co ID = {product_id}"}
-
-        current_stock = int(row.stock)
-        product_name = row.name
-
-        if current_stock >= quantity:
-            new_stock = current_stock - quantity
-            conn.execute(
-                text("UPDATE products SET stock = :s WHERE id = :pid"),
-                {"s": new_stock, "pid": product_id},
-            )
-            conn.execute(
-                text(
-                    "INSERT INTO orders "
-                    "(product_id, product_name, quantity, customer_name, "
-                    "customer_phone, status, note, created_at) "
-                    "VALUES (:pid, :pname, :qty, :cname, :cphone, :st, :note, :ts)"
-                ),
-                {
-                    "pid": product_id,
-                    "pname": product_name,
-                    "qty": quantity,
-                    "cname": customer_name,
-                    "cphone": customer_phone,
-                    "st": "confirmed",
-                    "note": f"Da tru kho: {current_stock} -> {new_stock}",
-                    "ts": now,
-                },
-            )
-
-            logger.info(
-                f"[Order OK] {product_name} x{quantity}, "
-                f"stock: {current_stock} -> {new_stock}"
-            )
-
-            return {
-                "status": "confirmed",
-                "product_name": product_name,
-                "quantity": quantity,
-                "remaining_stock": new_stock,
-                "message": (
-                    f"Dat hang thanh cong! {quantity} chiec {product_name}. "
-                    f"Con lai trong kho: {new_stock} chiec."
-                ),
-            }
-        else:
-            conn.execute(
-                text(
-                    "INSERT INTO orders "
-                    "(product_id, product_name, quantity, customer_name, "
-                    "customer_phone, status, note, created_at) "
-                    "VALUES (:pid, :pname, :qty, :cname, :cphone, :st, :note, :ts)"
-                ),
-                {
-                    "pid": product_id,
-                    "pname": product_name,
-                    "qty": quantity,
-                    "cname": customer_name,
-                    "cphone": customer_phone,
-                    "st": "pending_restock",
-                    "note": (
-                        f"Yeu cau {quantity} nhung kho chi con {current_stock}. "
-                        f"Thieu {quantity - current_stock} chiec. Da bao nhan vien restock."
-                    ),
-                    "ts": now,
-                },
-            )
-
-            logger.info(
-                f"[Order PENDING] {product_name} x{quantity}, "
-                f"stock chi con {current_stock}, thieu {quantity - current_stock}"
-            )
-
-            result = {
-                "status": "pending_restock",
-                "product_name": product_name,
-                "quantity_requested": quantity,
-                "current_stock": current_stock,
-                "shortage": quantity - current_stock,
-                "message": (
-                    f"So luong hien tai trong kho khong du! "
-                    f"Ban yeu cau {quantity} chiec {product_name} nhung "
-                    f"kho chi con {current_stock} chiec (thieu {quantity - current_stock}). "
-                    f"Toi da bao cho nhan vien de restock."
-                ),
-            }
-
-            if not customer_name or not customer_phone:
-                result["need_customer_info"] = True
-                result["message"] += (
-                    " Mong ban vui long de lai HO TEN va SO DIEN THOAI "
-                    "de nhan vien san sang goi lai cho ban khi hang ve."
-                )
-
-            return result
-
-
-def save_customer_info_to_order(
-    product_id: int,
     customer_name: str,
     customer_phone: str,
+    session_id: str | None = None,
 ) -> dict:
-    """Cap nhat thong tin khach hang vao don pending gan nhat."""
-    engine = get_engine()
-
-    with engine.connect() as conn:
-        row = conn.execute(
-            text(
-                "SELECT id FROM orders "
-                "WHERE product_id = :pid AND status = 'pending_restock' "
-                "AND (customer_name IS NULL OR customer_name = '') "
-                "ORDER BY created_at DESC LIMIT 1"
-            ),
-            {"pid": product_id},
-        ).fetchone()
-
-        if not row:
-            return {
-                "status": "no_pending_order",
-                "message": "Khong co don hang nao can cap nhat.",
-            }
-
-        conn.execute(
-            text(
-                "UPDATE orders SET customer_name = :cname, customer_phone = :cphone "
-                "WHERE id = :oid"
-            ),
-            {"cname": customer_name, "cphone": customer_phone, "oid": row.id},
+    """Dat hang: mot transaction trong Odoo (khoa dong san pham, kiem tra ton, tao + xac nhan don)."""
+    if quantity <= 0:
+        return {"error": "So luong dat hang phai lon hon 0."}
+    if not (customer_name or "").strip() or not (customer_phone or "").strip():
+        return {"error": "Can ho ten va so dien thoai nguoi nhan de dat hang."}
+    try:
+        res = get_odoo().call(
+            "sale.order",
+            "chat_place_order",
+            product_tmpl_id=int(product_id),
+            quantity=int(quantity),
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            session_id=session_id,
         )
-        conn.commit()
+    except OdooError as exc:
+        logger.error(f"[Order] Odoo tu choi: {exc}")
+        return {"error": f"Khong tao duoc don hang: {exc}"}
 
+    if res.get("error"):
+        return {"error": f"Khong tim thay san pham co ID = {product_id}"}
+
+    name, ref = res["product_name"], res["order_ref"]
+    if res["status"] == "confirmed":
+        logger.info(f"[Order OK] {ref}: {name} x{quantity}, con {res['remaining_stock']}")
+        return {
+            "status": "confirmed",
+            "order_ref": ref,
+            "product_name": name,
+            "quantity": quantity,
+            "amount_total": res["amount_total"],
+            "remaining_stock": res["remaining_stock"],
+            "message": (
+                f"Dat hang thanh cong! Ma don {ref}: {quantity} chiec {name}. "
+                f"Con lai trong kho: {res['remaining_stock']} chiec."
+            ),
+        }
+
+    current = res["free_qty_before"]
+    logger.info(f"[Order PENDING] {ref}: {name} x{quantity}, kho con {current}")
     return {
-        "status": "updated",
+        "status": "pending_restock",
+        "order_ref": ref,
+        "product_name": name,
+        "quantity_requested": quantity,
+        "current_stock": current,
+        "shortage": res["shortage"],
         "message": (
-            f"Da luu thong tin: {customer_name} - {customer_phone}. "
-            f"Nhan vien se lien he voi ban som nhat khi hang ve!"
+            f"So luong hien tai trong kho khong du! Ban yeu cau {quantity} chiec {name} nhung "
+            f"kho chi con {current} chiec (thieu {res['shortage']}). Da ghi nhan bao gia {ref} "
+            f"va bao nhan vien nhap hang; nhan vien se goi lai {customer_name} khi hang ve."
         ),
     }
 
 
-def update_stock(product_id: int, new_stock: int) -> dict:
-    """Cap nhat so luong ton kho cua san pham (nhan vien kho dung)."""
-    if new_stock < 0:
-        return {"error": "So luong ton kho khong the am."}
-
-    with get_engine().begin() as conn:
-        row = conn.execute(
-            text("SELECT id, name, stock FROM products WHERE id = :pid FOR UPDATE"),
-            {"pid": product_id},
-        ).fetchone()
-
-        if not row:
-            return {"error": f"Khong tim thay san pham co ID = {product_id}"}
-
-        old_stock = int(row.stock)
-        conn.execute(
-            text("UPDATE products SET stock = :s WHERE id = :pid"),
-            {"s": new_stock, "pid": product_id},
-        )
-
-    logger.info(f"[Stock Update] {row.name}: {old_stock} -> {new_stock}")
-
+def save_customer_info_to_order(session_id: str, customer_name: str, customer_phone: str) -> dict:
+    """Cap nhat ten + SDT vao bao gia (don cho hang) gan nhat cua phien chat."""
+    res = get_odoo().call(
+        "sale.order",
+        "chat_update_customer",
+        session_id=session_id,
+        customer_name=customer_name,
+        customer_phone=customer_phone,
+    )
+    if res.get("status") != "updated":
+        return {"status": "no_pending_order", "message": "Khong co don hang nao can cap nhat."}
     return {
-        "product_id": product_id,
-        "name": row.name,
-        "old_stock": old_stock,
-        "new_stock": new_stock,
-        "message": f"Da cap nhat {row.name}: {old_stock} -> {new_stock} chiec.",
+        "status": "updated",
+        "message": (
+            f"Da luu thong tin vao don {res['order_ref']}: {customer_name} - {customer_phone}. "
+            "Nhan vien se lien he voi ban som nhat khi hang ve!"
+        ),
     }
-
-
-def get_all_stock() -> list[dict]:
-    """Xem ton kho toan bo san pham."""
-    engine = get_engine()
-    with engine.connect() as conn:
-        rows = conn.execute(
-            text("SELECT id, name, brand, price, stock FROM products ORDER BY id")
-        ).fetchall()
-
-    return [
-        {
-            "product_id": r.id,
-            "name": r.name,
-            "brand": r.brand,
-            "price": float(r.price),
-            "stock": int(r.stock),
-        }
-        for r in rows
-    ]
-
-
-def get_pending_orders() -> list[dict]:
-    """Lay danh sach don hang (cho nhan vien/admin xem)."""
-    engine = get_engine()
-    with engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                "SELECT id, product_id, product_name, quantity, "
-                "customer_name, customer_phone, status, note, created_at "
-                "FROM orders ORDER BY created_at DESC"
-            )
-        ).fetchall()
-
-    return [
-        {
-            "id": r.id,
-            "product_id": r.product_id,
-            "product_name": r.product_name,
-            "quantity": r.quantity,
-            "customer_name": r.customer_name,
-            "customer_phone": r.customer_phone,
-            "status": r.status,
-            "note": r.note,
-            "created_at": r.created_at,
-        }
-        for r in rows
-    ]

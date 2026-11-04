@@ -2,7 +2,8 @@
 MCP server cho kho hang - cho agent hoac ung dung khac (bat ky MCP client nao) dung lai
 cac nghiep vu cua cua hang: tim san pham, xem thong so, kiem tra ton kho, so sanh, dat hang.
 
-Dung chung service voi chatbot (cung PostgreSQL / Qdrant, cung row lock khi dat hang).
+Dung chung service voi chatbot: du lieu doc/ghi tren Odoo (san pham, ton kho, don ban),
+tim theo nghia qua Qdrant; dat hang di qua cung method chat_place_order (mot transaction trong Odoo).
 
 Chay:
     python -m app.mcp_server                 # stdio (MCP client tu khoi dong process)
@@ -91,17 +92,12 @@ def compare_products(product_ids: list[int]) -> dict:
 
 
 @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False))
-def place_order(
-    product_id: int,
-    quantity: int,
-    customer_name: Optional[str] = None,
-    customer_phone: Optional[str] = None,
-) -> dict:
-    """Place an order. Deducts stock under a row lock, or records a pending-restock order
-    when stock is short. Confirm the order with the customer first."""
+def place_order(product_id: int, quantity: int, customer_name: str, customer_phone: str) -> dict:
+    """Place an order in Odoo. Enough stock: a confirmed sales order that reserves the units.
+    Not enough: a quotation waiting for restock. Confirm the order with the customer first."""
     from app.services.inventory import place_order as _place
 
-    return _place(product_id, quantity, customer_name, customer_phone)
+    return _place(product_id, quantity, customer_name, customer_phone, session_id="mcp")
 
 
 def main() -> None:

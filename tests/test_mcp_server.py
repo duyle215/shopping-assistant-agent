@@ -1,12 +1,10 @@
-"""MCP server: danh sach tool, annotation, va goi tool that tren database test."""
+"""MCP server: danh sach tool, annotation, va goi tool that tren Odoo test."""
 
 from __future__ import annotations
 
 import json
 
 import anyio
-from sqlalchemy import text
-
 from app.mcp_server import server
 
 
@@ -33,19 +31,14 @@ def test_tools_are_listed_with_annotations():
     assert tools["place_order"].annotations.read_only_hint is False
 
 
-def test_place_order_and_inventory_through_mcp(db):
-    with db.begin() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO products (id, name, brand, model, price, stock, chipset, ram_gb, "
-                "storage_gb, screen_inch, refresh_rate_hz, battery_mah, main_camera_mp, os) "
-                "VALUES (1, 'Phone A', 'Brand', 'A', 5000000, 3, 'Chip', 8, '{128}', 6.5, 120, "
-                "5000, 50, 'Android')"
-            )
-        )
+def test_place_order_and_inventory_through_mcp(odoo, add_phone):
+    pid = add_phone("Phone A", stock=3, price=5_000_000, brand="Brand", os="Android")
 
-    assert _call("check_inventory", {"product_id": 1})["stock"] == 3
-    order = _call("place_order", {"product_id": 1, "quantity": 2, "customer_name": "An"})
+    assert _call("check_inventory", {"product_id": pid})["stock"] == 3
+    order = _call(
+        "place_order", {"product_id": pid, "quantity": 2, "customer_name": "An", "customer_phone": "0901"}
+    )
     assert order["status"] == "confirmed"
-    assert _call("check_inventory", {"product_id": 1})["stock"] == 1
-    assert _call("get_product", {"product_id": 1})["name"] == "Phone A"
+    assert order["order_ref"]
+    assert _call("check_inventory", {"product_id": pid})["stock"] == 1
+    assert _call("get_product", {"product_id": pid})["name"] == "Phone A"

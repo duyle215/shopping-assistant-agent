@@ -40,6 +40,12 @@ def products_page():
     return render_template("index.html", page="products")
 
 
+@api.route("/embed")
+def embed():
+    """Chi khung chat, de nhung vao website Odoo (iframe trong addon shopping_assistant_chat)."""
+    return render_template("index.html", embed=True)
+
+
 # ------------------------------------------------------------------
 # API ENDPOINTS
 # ------------------------------------------------------------------
@@ -141,69 +147,6 @@ def api_traces_summary():
     return jsonify(tracing.summary(hours))
 
 
-@api.get("/api/stock")
-def api_stock():
-    """Xem ton kho toan bo san pham."""
-    try:
-        from app.services.inventory import get_all_stock
-
-        stock_list = get_all_stock()
-        return jsonify({"total": len(stock_list), "stock": stock_list})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@api.route("/api/stock", methods=["PATCH"])
-def api_stock_update():
-    """Cap nhat so luong ton kho (nhan vien kho/demo)."""
-    data = request.get_json(force=True)
-    product_id = data.get("product_id")
-    new_stock = data.get("stock")
-
-    if product_id is None or new_stock is None:
-        return jsonify({"error": "Can truyen product_id va stock."}), 400
-
-    try:
-        product_id = int(product_id)
-        new_stock = int(new_stock)
-    except (ValueError, TypeError):
-        return jsonify({"error": "product_id va stock phai la so nguyen."}), 400
-
-    try:
-        from app.services.inventory import update_stock
-
-        result = update_stock(product_id, new_stock)
-        if "error" in result:
-            return jsonify(result), 400
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@api.get("/api/orders")
-def api_orders():
-    """Xem danh sach don hang (cho nhan vien/admin)."""
-    try:
-        from app.services.inventory import get_pending_orders
-
-        orders = get_pending_orders()
-        return jsonify({"total": len(orders), "orders": orders})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@api.get("/api/support-requests")
-def api_support_requests():
-    """Xem danh sach yeu cau ho tro (cho nhan vien/admin)."""
-    try:
-        from app.services.support import get_pending_support_requests
-
-        requests_list = get_pending_support_requests()
-        return jsonify({"total": len(requests_list), "requests": requests_list})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 def _display_specs(p) -> dict[str, str]:
     """Thong so dang chu cho the san pham tren giao dien."""
     storage = " / ".join(f"{x // 1024}TB" if x >= 1024 else f"{x}GB" for x in p.storage_gb)
@@ -249,6 +192,15 @@ def api_health():
         results["qdrant"] = "OK"
     except Exception as e:
         results["qdrant"] = f"FAIL: {e}"
+
+    # Odoo (backend: san pham, ton kho, don hang)
+    try:
+        from app.odoo import get_odoo
+
+        get_odoo().call("res.users", "context_get")
+        results["odoo"] = "OK"
+    except Exception as e:
+        results["odoo"] = f"FAIL: {e}"
 
     status = "OK" if all(v == "OK" for v in results.values()) else "DEGRADED"
     return jsonify({"status": status, **results})

@@ -102,8 +102,9 @@ def _exec_place_order(args: dict) -> str:
     result = place_order(
         product_id=args["product_id"],
         quantity=args["quantity"],
-        customer_name=args.get("customer_name"),
-        customer_phone=args.get("customer_phone"),
+        customer_name=args.get("customer_name") or "",
+        customer_phone=args.get("customer_phone") or "",
+        session_id=args.get("session_id"),
     )
     return json.dumps(result, ensure_ascii=False)
 
@@ -133,7 +134,7 @@ def _exec_save_customer_info(args: dict) -> str:
         )
     else:
         result = save_customer_info_to_order(
-            product_id=args.get("product_id", 0),
+            session_id=args.get("session_id", ""),
             customer_name=name,
             customer_phone=phone,
         )
@@ -306,9 +307,9 @@ PLACE_ORDER_DEF = {
     "function": {
         "name": "place_order",
         "description": (
-            "Dat hang san pham. Neu kho du hang se tru stock va xac nhan. "
-            "Neu khong du hang se tao don cho restock va yeu cau khach "
-            "de lai thong tin lien he."
+            "Dat hang san pham. Can HO TEN va SO DIEN THOAI nguoi nhan (hoi khach neu chua co). "
+            "Neu kho du hang, don duoc xac nhan va giu hang. "
+            "Neu khong du hang, don duoc ghi nhan cho nhap hang va nhan vien se goi lai."
         ),
         "parameters": {
             "type": "object",
@@ -323,11 +324,11 @@ PLACE_ORDER_DEF = {
                 },
                 "customer_name": {
                     "type": "string",
-                    "description": "Ho ten khach hang (neu co)",
+                    "description": "Ho ten nguoi nhan (bat buoc, hoi khach neu chua co)",
                 },
                 "customer_phone": {
                     "type": "string",
-                    "description": "So dien thoai khach hang (neu co)",
+                    "description": "So dien thoai nguoi nhan (bat buoc, hoi khach neu chua co)",
                 },
             },
             "required": ["product_id", "quantity"],
@@ -391,11 +392,7 @@ SAVE_CUSTOMER_INFO_DEF = {
                 "context": {
                     "type": "string",
                     "enum": ["order", "support"],
-                    "description": "Ngu canh: 'order' (don hang) hoac 'support' (yeu cau ho tro)",
-                },
-                "product_id": {
-                    "type": "integer",
-                    "description": "ID san pham (chi can khi context='order')",
+                    "description": "Ngu canh: 'order' (don cho hang) hoac 'support' (yeu cau ho tro)",
                 },
             },
             "required": ["customer_name", "customer_phone", "context"],

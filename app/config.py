@@ -67,6 +67,19 @@ QDRANT_PATH = os.getenv("QDRANT_PATH", "./qdrant_data")
 QDRANT_COLLECTION = _require("QDRANT_COLLECTION")
 
 # ------------------------------------------------------------------
+# ODOO (backend: san pham, ton kho, don hang, yeu cau ho tro)
+# ------------------------------------------------------------------
+ODOO_URL = os.getenv("ODOO_URL", "http://localhost:8069")
+ODOO_DB = os.getenv("ODOO_DB", "odoo")
+# API key cua user chatbot; de trong thi doc tu odoo/secrets/<db>.json (do odoo-setup tao)
+ODOO_API_KEY = os.getenv("ODOO_API_KEY") or ""
+ODOO_ADMIN_API_KEY = os.getenv("ODOO_ADMIN_API_KEY") or ""
+ODOO_SECRETS_DIR = os.getenv(
+    "ODOO_SECRETS_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "odoo", "secrets")
+)
+ODOO_TIMEOUT = float(os.getenv("ODOO_TIMEOUT", "30"))
+
+# ------------------------------------------------------------------
 # AGENT LOOP
 # ------------------------------------------------------------------
 MAX_ITERATIONS = 10

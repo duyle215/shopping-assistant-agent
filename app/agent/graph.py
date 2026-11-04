@@ -40,7 +40,7 @@ AGENT_CONFIGS = build_agent_configs(TOOL_DEFS)
 AGENT_KEYS = {cfg.name: key for key, cfg in AGENT_CONFIGS.items()}
 
 # Tool can session_id that cua cuoc hoi thoai (model khong biet, khong duoc bia)
-SESSION_TOOLS = {"request_human_support", "save_customer_info"}
+SESSION_TOOLS = {"request_human_support", "save_customer_info", "place_order"}
 # So luot hoi thoai truoc do gui kem cho model
 HISTORY_TURNS = 10
 

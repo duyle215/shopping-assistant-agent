@@ -1,0 +1,7 @@
+# Local development: publish Postgres and Qdrant so the app, tests and scripts can run on the host.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres qdrant odoo
+services:
+  postgres:
+    ports: ["5432:5432"]
+  qdrant:
+    ports: ["6333:6333"]

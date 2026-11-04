@@ -1,6 +1,6 @@
 """
-Search service - hybrid search: tu khoa (PostgreSQL pg_trgm) + theo nghia (Qdrant),
-gop bang Reciprocal Rank Fusion, ca hai dung chung bo loc co cau truc.
+Search service - hybrid search: tu khoa (trigram tren ten san pham Odoo) + theo nghia (Qdrant),
+gop bang Reciprocal Rank Fusion, ca hai dung chung bo loc co cau truc (domain Odoo / filter Qdrant).
 
 LLM bien cau hoi thanh tham so tool, vd "Samsung duoi 10 trieu pin trau" ->
 query="pin trau", brand="Samsung", price_max=10_000_000, battery_min=5000.
@@ -12,14 +12,14 @@ query="pin trau", brand="Samsung", price_max=10_000_000, battery_min=5000.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Optional
-
-from sqlalchemy import text
 
 from app.agent.schemas import SearchResult
 from app.catalog import normalize_brand
 from app.config import EMBED_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL, QDRANT_COLLECTION
-from app.db import get_engine, get_qdrant
+from app.db import get_qdrant
+from app.odoo import get_odoo
 
 logger = logging.getLogger("search")
 
@@ -79,33 +79,52 @@ def build_filter(**filters):
     return Filter(must=must) if must else None
 
 
-def _sql_filter(f: dict) -> tuple[str, dict]:
-    clauses, params = [], {}
+def odoo_domain(f: dict) -> list:
+    """Bo loc da chuan hoa -> domain Odoo tren product.template."""
+    from app.services.product import BASE_DOMAIN
+
+    domain = list(BASE_DOMAIN)
     if f["brand"]:
-        clauses.append("brand = :brand")
-        params["brand"] = f["brand"]
+        domain.append(("phone_brand", "=", f["brand"]))
     if f["os"]:
-        clauses.append("os = :os")
-        params["os"] = f["os"]
+        domain.append(("phone_os", "=", f["os"]))
     if f["price_min"] is not None:
-        clauses.append("price >= :price_min")
-        params["price_min"] = f["price_min"]
+        domain.append(("list_price", ">=", f["price_min"]))
     if f["price_max"] is not None:
-        clauses.append("price <= :price_max")
-        params["price_max"] = f["price_max"]
+        domain.append(("list_price", "<=", f["price_max"]))
     if f["ram_min"] is not None:
-        clauses.append("ram_gb >= :ram_min")
-        params["ram_min"] = f["ram_min"]
+        domain.append(("phone_ram_gb", ">=", f["ram_min"]))
     if f["battery_min"] is not None:
-        clauses.append("battery_mah >= :battery_min")
-        params["battery_min"] = f["battery_min"]
+        domain.append(("phone_battery_mah", ">=", f["battery_min"]))
     if f["storage_min"] is not None:
-        clauses.append(":storage_min <= ANY(storage_gb)")
-        params["storage_min"] = f["storage_min"]
+        domain.append(("phone_max_storage_gb", ">=", f["storage_min"]))
     if f["refresh_rate_min"] is not None:
-        clauses.append("refresh_rate_hz >= :refresh_rate_min")
-        params["refresh_rate_min"] = f["refresh_rate_min"]
-    return (" AND ".join(clauses) or "TRUE"), params
+        domain.append(("phone_refresh_rate_hz", ">=", f["refresh_rate_min"]))
+    return domain
+
+
+# ------------------------------------------------------------------
+# DO GIONG TEN (trigram, nhu pg_trgm)
+# ------------------------------------------------------------------
+def trigrams(text: str) -> set[str]:
+    """Trigram theo tung tu, giong pg_trgm: tu viet thuong, them 2 dau cach truoc, 1 sau."""
+    out: set[str] = set()
+    for word in re.findall(r"[0-9a-z\u00c0-\u1ef9]+", text.lower()):
+        padded = f"  {word} "
+        out.update(padded[i : i + 3] for i in range(len(padded) - 2))
+    return out
+
+
+def word_similarity(query: str, name: str) -> float:
+    """Ti le trigram cua truy van co trong ten ("iphone 15" nam tron trong "iPhone 15 Pro Max")."""
+    q = trigrams(query)
+    return len(q & trigrams(name)) / len(q) if q else 0.0
+
+
+def similarity(a: str, b: str) -> float:
+    """Do giong ca chuoi (Jaccard tren trigram) de pha hoa: uu tien ten khop tron."""
+    ta, tb = trigrams(a), trigrams(b)
+    return len(ta & tb) / len(ta | tb) if ta | tb else 0.0
 
 
 # ------------------------------------------------------------------
@@ -127,22 +146,15 @@ def dense_ids(query_vector: list[float], limit: int, **filters) -> list[int]:
 
 
 def keyword_ids(query: str, limit: int, **filters) -> list[int]:
-    """Do giong ten may theo trigram (pg_trgm), chi giu ket qua du giong."""
-    where, params = _sql_filter(_clean_filters(**filters))
-    # word_similarity: truy van co nam trong ten khong ("iphone 15" khop ca "iPhone 15 Pro Max");
-    # similarity tren ca chuoi de pha hoa, uu tien ten khop tron ("iPhone 15").
-    sql = text(
-        "SELECT id, word_similarity(lower(:q), lower(name)) AS sim, "
-        "similarity(lower(:q), lower(name)) AS full_sim "
-        f"FROM products WHERE {where} ORDER BY sim DESC, full_sim DESC, id LIMIT :limit"
+    """Do giong ten may theo trigram tren cac san pham thoa bo loc (lay tu Odoo)."""
+    rows = get_odoo().search_read(
+        "product.template", odoo_domain(_clean_filters(**filters)), ["id", "name"]
     )
-    try:
-        with get_engine().connect() as conn:
-            rows = conn.execute(sql, {**params, "q": query, "limit": limit}).fetchall()
-    except Exception as exc:  # pg_trgm chua cai -> chi dung tim theo nghia
-        logger.warning(f"[Search] Bo qua tim tu khoa: {exc}")
-        return []
-    return [r.id for r in rows if r.sim >= KEYWORD_MIN_SIMILARITY]
+    scored = [
+        (word_similarity(query, r["name"]), similarity(query, r["name"]), r["id"]) for r in rows
+    ]
+    scored.sort(key=lambda s: (-s[0], -s[1], s[2]))
+    return [pid for sim, _, pid in scored[:limit] if sim >= KEYWORD_MIN_SIMILARITY]
 
 
 def rrf(rankings: list[list[int]], k: int = RRF_K) -> list[tuple[int, float]]:
@@ -154,31 +166,38 @@ def rrf(rankings: list[list[int]], k: int = RRF_K) -> list[tuple[int, float]]:
     return sorted(scores.items(), key=lambda item: (-item[1], item[0]))
 
 
-def _load(ids_scores: list[tuple[int, float]]) -> list[SearchResult]:
+LOAD_FIELDS = [
+    "id",
+    "name",
+    "list_price",
+    "phone_brand",
+    "phone_ram_gb",
+    "phone_battery_mah",
+    "phone_max_storage_gb",
+    "phone_main_camera_mp",
+    "phone_refresh_rate_hz",
+]
+
+
+def _load(ids_scores: list[tuple[int, float]], **filters) -> list[SearchResult]:
+    """Doc ket qua tu Odoo. Bo loc chay lai o day, nen payload Qdrant cu (vd gia vua doi
+    tren Odoo) hay san pham da an khong lot vao ket qua."""
     if not ids_scores:
         return []
     ids = [pid for pid, _ in ids_scores]
-    with get_engine().connect() as conn:
-        rows = conn.execute(
-            text(
-                "SELECT id, name, brand, price, ram_gb, battery_mah, main_camera_mp, refresh_rate_hz, "
-                "(SELECT max(s) FROM unnest(storage_gb) s) AS max_storage_gb "
-                "FROM products WHERE id = ANY(:ids)"
-            ),
-            {"ids": ids},
-        ).fetchall()
-    by_id = {r.id: r for r in rows}
+    domain = [("id", "in", ids), *odoo_domain(_clean_filters(**filters))]
+    by_id = {r["id"]: r for r in get_odoo().search_read("product.template", domain, LOAD_FIELDS)}
     return [
         SearchResult(
-            product_id=r.id,
-            name=r.name,
-            brand=r.brand,
-            price=int(r.price),
-            ram_gb=r.ram_gb,
-            battery_mah=r.battery_mah,
-            max_storage_gb=r.max_storage_gb,
-            main_camera_mp=r.main_camera_mp,
-            refresh_rate_hz=r.refresh_rate_hz,
+            product_id=r["id"],
+            name=r["name"],
+            brand=r["phone_brand"] or "",
+            price=int(round(r["list_price"])),
+            ram_gb=r["phone_ram_gb"],
+            battery_mah=r["phone_battery_mah"],
+            max_storage_gb=r["phone_max_storage_gb"],
+            main_camera_mp=r["phone_main_camera_mp"],
+            refresh_rate_hz=r["phone_refresh_rate_hz"],
             score=round(score, 4),
         )
         for pid, score in ids_scores
@@ -186,25 +205,24 @@ def _load(ids_scores: list[tuple[int, float]]) -> list[SearchResult]:
     ]
 
 
-# Cau hoi "nhat" (re nhat, pin trau nhat...): sap xep bang SQL tren du lieu that
+# Cau hoi "nhat" (re nhat, pin trau nhat...): Odoo sap xep tren du lieu that
 SORTS: dict[str, str] = {
-    "price_asc": "price ASC",
-    "price_desc": "price DESC",
-    "battery_desc": "battery_mah DESC",
-    "ram_desc": "ram_gb DESC",
-    "refresh_rate_desc": "refresh_rate_hz DESC",
-    "storage_desc": "(SELECT max(s) FROM unnest(storage_gb) s) DESC",
-    "camera_desc": "main_camera_mp DESC",
+    "price_asc": "list_price asc",
+    "price_desc": "list_price desc",
+    "battery_desc": "phone_battery_mah desc",
+    "ram_desc": "phone_ram_gb desc",
+    "refresh_rate_desc": "phone_refresh_rate_hz desc",
+    "storage_desc": "phone_max_storage_gb desc",
+    "camera_desc": "phone_main_camera_mp desc",
 }
 
 
 def sorted_ids(sort_by: str, limit: int, **filters) -> list[int]:
     if sort_by not in SORTS:
         raise ValueError(f"sort_by phai la mot trong {list(SORTS)}")
-    where, params = _sql_filter(_clean_filters(**filters))
-    sql = text(f"SELECT id FROM products WHERE {where} ORDER BY {SORTS[sort_by]}, id LIMIT :limit")
-    with get_engine().connect() as conn:
-        return [r.id for r in conn.execute(sql, {**params, "limit": limit})]
+    return get_odoo().search(
+        "product.template", odoo_domain(_clean_filters(**filters)), order=f"{SORTS[sort_by]}, id", limit=limit
+    )
 
 
 # ------------------------------------------------------------------
@@ -216,7 +234,7 @@ def search_products(
     """mode: 'hybrid' (mac dinh), 'dense' (chi theo nghia) hoac 'keyword'.
     sort_by: sap xep theo thong so thay vi do giong nghia (vd 'refresh_rate_desc')."""
     if sort_by:
-        return _load([(pid, 0.0) for pid in sorted_ids(sort_by, top_k, **filters)])
+        return _load([(pid, 0.0) for pid in sorted_ids(sort_by, top_k, **filters)], **filters)
     pool = max(top_k * 3, 10)
     rankings = []
     if mode in ("hybrid", "dense"):
@@ -229,4 +247,4 @@ def search_products(
             logger.warning(f"[Search] Tim theo nghia loi, chi dung tu khoa: {exc}")
     if mode in ("hybrid", "keyword"):
         rankings.append(keyword_ids(query, pool, **filters))
-    return _load(rrf(rankings)[:top_k])
+    return _load(rrf(rankings)[:top_k], **filters)
