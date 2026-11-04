@@ -427,62 +427,22 @@
         color: #c62828;
       }
 
-      /* ── ADMIN PANEL ── */
-      #panel-admin {
-        flex-direction: column;
-        overflow-y: auto;
-        padding: 20px;
-        gap: 20px;
+      .products-source {
+        font-size: 0.8rem;
+        color: #777;
+        margin-top: 2px;
       }
-      .admin-section {
-        background: #fff;
-        border-radius: 12px;
-        border: 1px solid #e8e8e8;
-        padding: 18px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+      /* ── EMBED (/embed: chat only, inside the Odoo website) ── */
+      body.embed header {
+        padding: 10px 14px;
       }
-      .admin-section h2 {
-        font-size: 1rem;
-        font-weight: 700;
-        margin-bottom: 12px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
+      body.embed header .sub,
+      body.embed .tab-btn {
+        display: none;
       }
-      .admin-section h2 .count-badge {
-        background: #e94560;
-        color: #fff;
-        font-size: 0.72rem;
-        padding: 2px 8px;
-        border-radius: 20px;
-      }
-      .admin-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.82rem;
-      }
-      .admin-table th,
-      .admin-table td {
-        border: 1px solid #eee;
-        padding: 8px 10px;
-        text-align: left;
-      }
-      .admin-table th {
-        background: #f5f5f5;
-        font-weight: 600;
-        font-size: 0.78rem;
-        color: #666;
-      }
-      .admin-table tr:hover {
-        background: #fafafa;
-      }
-      .status-confirmed {
-        color: #2e7d32;
-        font-weight: 600;
-      }
-      .status-pending {
-        color: #f57f17;
-        font-weight: 600;
+      body.embed .tabs {
+        justify-content: flex-end;
       }
 
       /* ── HEALTH PANEL ── */
@@ -686,7 +646,7 @@
       }
     </style>
   </head>
-  <body>
+  <body{% if embed %} class="embed"{% endif %}>
     <!-- HEADER -->
     <header>
       <span class="logo">📱</span>
@@ -703,7 +663,6 @@
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('chat')" data-i18n="tab.chat">Chat AI</button>
       <button class="tab-btn" onclick="switchTab('products')" data-i18n="tab.products">Sản phẩm</button>
-      <button class="tab-btn" onclick="switchTab('admin')" data-i18n="tab.admin">Quản lý</button>
       <button class="tab-btn" onclick="switchTab('health')" data-i18n="tab.health">Hệ thống</button>
       <button class="new-chat-btn" onclick="newChat()" data-i18n="chat.new" data-i18n-title="chat.newTitle">
         + Hội thoại mới
@@ -736,50 +695,14 @@
     <!-- PRODUCTS PANEL -->
     <div id="panel-products" class="tab-panel">
       <div class="products-header">
-        <h2 data-i18n="products.title">Danh sách sản phẩm</h2>
+        <div>
+          <h2 data-i18n="products.title">Danh sách sản phẩm</h2>
+          <div class="products-source" data-i18n="products.source">Dữ liệu trực tiếp từ Odoo</div>
+        </div>
         <button class="refresh-btn" onclick="loadProducts()" data-i18n="common.reload">Tải lại</button>
       </div>
       <div class="products-grid" id="productsGrid">
         <p style="color: #999; font-size: 0.9rem" data-i18n="common.loading">Đang tải...</p>
-      </div>
-    </div>
-
-    <!-- ADMIN PANEL -->
-    <div id="panel-admin" class="tab-panel">
-      <div
-        style="
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        "
-      >
-        <h2 style="font-size: 1.1rem; font-weight: 600" data-i18n="admin.title">
-          Quản lý kho hàng, đơn hàng & hỗ trợ
-        </h2>
-        <button class="refresh-btn" onclick="loadAdmin()" data-i18n="common.reload">Tải lại</button>
-      </div>
-
-      <div class="admin-section">
-        <h2><span data-i18n="admin.stock">Tồn kho</span> <span id="stockCount" class="count-badge">0</span></h2>
-        <div id="stockTable">
-          <p style="color: #999; font-size: 0.85rem" data-i18n="common.loading">Đang tải...</p>
-        </div>
-      </div>
-
-      <div class="admin-section">
-        <h2><span data-i18n="admin.orders">Đơn hàng</span> <span id="ordersCount" class="count-badge">0</span></h2>
-        <div id="ordersTable">
-          <p style="color: #999; font-size: 0.85rem" data-i18n="admin.noOrders">Chưa có đơn hàng.</p>
-        </div>
-      </div>
-
-      <div class="admin-section">
-        <h2>
-          <span data-i18n="admin.support">Yêu cầu hỗ trợ</span> <span id="supportCount" class="count-badge">0</span>
-        </h2>
-        <div id="supportTable">
-          <p style="color: #999; font-size: 0.85rem" data-i18n="admin.noSupport">Chưa có yêu cầu.</p>
-        </div>
       </div>
     </div>
 
@@ -808,7 +731,6 @@
           "app.subtitle": "Tư vấn điện thoại thông minh",
           "tab.chat": "Chat AI",
           "tab.products": "Sản phẩm",
-          "tab.admin": "Quản lý",
           "tab.health": "Hệ thống",
           "chat.new": "+ Hội thoại mới",
           "chat.newTitle": "Bắt đầu hội thoại mới",
@@ -844,6 +766,7 @@
           "common.noServer": "Không thể kết nối đến server.",
           "common.loadFailed": "Không thể tải dữ liệu.",
           "products.title": "Danh sách sản phẩm",
+          "products.source": "Dữ liệu trực tiếp từ Odoo. Nhân viên quản lý sản phẩm, tồn kho, đơn hàng và yêu cầu hỗ trợ trong Odoo.",
           "products.ask": "Hỏi về sản phẩm này",
           "products.askText": "Cho mình biết chi tiết về {name}",
           "spec.chip": "Chip",
@@ -856,19 +779,6 @@
           "stock.left": "Còn {n} chiếc",
           "stock.low": "Chỉ còn {n}",
           "stock.out": "Hết hàng",
-          "admin.title": "Quản lý kho hàng, đơn hàng & hỗ trợ",
-          "admin.stock": "Tồn kho",
-          "admin.orders": "Đơn hàng",
-          "admin.support": "Yêu cầu hỗ trợ",
-          "admin.noProducts": "Chưa có sản phẩm.",
-          "admin.noOrders": "Chưa có đơn hàng nào.",
-          "admin.noSupport": "Chưa có yêu cầu hỗ trợ nào.",
-          "admin.update": "Cập nhật",
-          "admin.stockFailed": "Lỗi tải tồn kho.",
-          "admin.ordersFailed": "Lỗi tải đơn hàng.",
-          "admin.supportFailed": "Lỗi tải yêu cầu hỗ trợ.",
-          "admin.badQty": "Số lượng phải là số nguyên >= 0",
-          "admin.updateFailed": "Không thể cập nhật tồn kho.",
           "col.product": "Sản phẩm",
           "col.brand": "Hãng",
           "col.price": "Giá",
@@ -904,7 +814,6 @@
           "app.subtitle": "AI phone shopping assistant",
           "tab.chat": "AI Chat",
           "tab.products": "Products",
-          "tab.admin": "Staff",
           "tab.health": "System",
           "chat.new": "+ New chat",
           "chat.newTitle": "Start a new conversation",
@@ -940,6 +849,7 @@
           "common.noServer": "Cannot reach the server.",
           "common.loadFailed": "Could not load the data.",
           "products.title": "Products",
+          "products.source": "Live data from Odoo. Staff manage products, stock, orders and support requests in Odoo.",
           "products.ask": "Ask about this phone",
           "products.askText": "Tell me more about the {name}",
           "spec.chip": "Chip",
@@ -952,19 +862,6 @@
           "stock.left": "{n} in stock",
           "stock.low": "Only {n} left",
           "stock.out": "Out of stock",
-          "admin.title": "Stock, orders & support requests",
-          "admin.stock": "Stock",
-          "admin.orders": "Orders",
-          "admin.support": "Support requests",
-          "admin.noProducts": "No products yet.",
-          "admin.noOrders": "No orders yet.",
-          "admin.noSupport": "No support requests yet.",
-          "admin.update": "Update",
-          "admin.stockFailed": "Could not load stock.",
-          "admin.ordersFailed": "Could not load orders.",
-          "admin.supportFailed": "Could not load support requests.",
-          "admin.badQty": "Quantity must be a whole number >= 0",
-          "admin.updateFailed": "Could not update stock.",
           "col.product": "Product",
           "col.brand": "Brand",
           "col.price": "Price",
@@ -1036,7 +933,6 @@
         applyI18n();
         const active = document.querySelector(".tab-panel.active");
         if (active && active.id === "panel-products") loadProducts();
-        if (active && active.id === "panel-admin") loadAdmin();
         if (active && active.id === "panel-health") loadHealth();
       }
 
@@ -1070,7 +966,7 @@
       // ── TAB SWITCHING ────────────────────────────────────────────
       function switchTab(tab) {
         document.querySelectorAll(".tab-btn").forEach((b, i) => {
-          const names = ["chat", "products", "admin", "health"];
+          const names = ["chat", "products", "health"];
           b.classList.toggle("active", names[i] === tab);
         });
         document
@@ -1080,7 +976,6 @@
 
         if (tab === "products") loadProducts();
         if (tab === "health") loadHealth();
-        if (tab === "admin") loadAdmin();
       }
 
       // ── CHAT ────────────────────────────────────────────────────
@@ -1346,157 +1241,6 @@
         document.getElementById("userInput").focus();
       }
 
-      // ── ADMIN ──────────────────────────────────────────────────
-      async function loadAdmin() {
-        // Load stock
-        try {
-          const sRes = await fetch("/api/stock");
-          const sData = await sRes.json();
-          const sEl = document.getElementById("stockTable");
-          document.getElementById("stockCount").textContent = sData.total || 0;
-
-          if (!sData.stock || sData.stock.length === 0) {
-            sEl.innerHTML =
-              `<p style="color:#999;font-size:.85rem">${t("admin.noProducts")}</p>`;
-          } else {
-            let html = '<table class="admin-table"><thead><tr>';
-            html +=
-              `<th>ID</th><th>${t("col.product")}</th><th>${t("col.brand")}</th><th>${t("col.price")}</th><th>${t("col.stock")}</th><th>${t("col.action")}</th>`;
-            html += "</tr></thead><tbody>";
-            sData.stock.forEach((s) => {
-              const cls =
-                s.stock === 0
-                  ? "stock-out"
-                  : s.stock <= 5
-                    ? "stock-low"
-                    : "stock-ok";
-              html += `<tr>
-                <td>${s.product_id}</td>
-                <td>${s.name}</td>
-                <td>${s.brand}</td>
-                <td>${Number(s.price).toLocaleString(locale())} ₫</td>
-                <td><span class="stock-badge ${cls}" style="display:inline">${s.stock}</span></td>
-                <td>
-                  <input type="number" id="stock-input-${s.product_id}" value="${s.stock}"
-                    min="0" style="width:60px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;text-align:center">
-                  <button class="refresh-btn" style="font-size:.75rem;padding:3px 8px;margin-left:4px"
-                    onclick="updateStock(${s.product_id})">${t("admin.update")}</button>
-                </td>
-              </tr>`;
-            });
-            html += "</tbody></table>";
-            sEl.innerHTML = html;
-          }
-        } catch {
-          document.getElementById("stockTable").innerHTML =
-            `<p style="color:red">${t("admin.stockFailed")}</p>`;
-        }
-
-        // Load orders
-        try {
-          const res = await fetch("/api/orders");
-          const data = await res.json();
-          const el = document.getElementById("ordersTable");
-          document.getElementById("ordersCount").textContent = data.total || 0;
-
-          if (!data.orders || data.orders.length === 0) {
-            el.innerHTML =
-              `<p style="color:#999;font-size:.85rem">${t("admin.noOrders")}</p>`;
-          } else {
-            let html = '<table class="admin-table"><thead><tr>';
-            html +=
-              `<th>ID</th><th>${t("col.product")}</th><th>${t("col.qty")}</th><th>${t("col.customer")}</th><th>${t("col.phone")}</th><th>${t("col.status")}</th><th>${t("col.note")}</th><th>${t("col.time")}</th>`;
-            html += "</tr></thead><tbody>";
-            data.orders.forEach((o) => {
-              const stCls =
-                o.status === "confirmed"
-                  ? "status-confirmed"
-                  : "status-pending";
-              const stLabel =
-                o.status === "confirmed" ? t("status.confirmed") : t("status.restock");
-              html += `<tr>
-                <td>${o.id}</td>
-                <td>${o.product_name}</td>
-                <td>${o.quantity}</td>
-                <td>${o.customer_name || "-"}</td>
-                <td>${o.customer_phone || "-"}</td>
-                <td class="${stCls}">${stLabel}</td>
-                <td style="max-width:200px;font-size:.78rem">${o.note || "-"}</td>
-                <td style="font-size:.78rem">${o.created_at}</td>
-              </tr>`;
-            });
-            html += "</tbody></table>";
-            el.innerHTML = html;
-          }
-        } catch {
-          document.getElementById("ordersTable").innerHTML =
-            `<p style="color:red">${t("admin.ordersFailed")}</p>`;
-        }
-
-        // Load support requests
-        try {
-          const res = await fetch("/api/support-requests");
-          const data = await res.json();
-          const el = document.getElementById("supportTable");
-          document.getElementById("supportCount").textContent = data.total || 0;
-
-          if (!data.requests || data.requests.length === 0) {
-            el.innerHTML =
-              `<p style="color:#999;font-size:.85rem">${t("admin.noSupport")}</p>`;
-          } else {
-            let html = '<table class="admin-table"><thead><tr>';
-            html +=
-              `<th>ID</th><th>${t("col.reason")}</th><th>${t("col.customer")}</th><th>${t("col.phone")}</th><th>${t("col.status")}</th><th>${t("col.time")}</th>`;
-            html += "</tr></thead><tbody>";
-            data.requests.forEach((r) => {
-              const stCls =
-                r.status === "resolved" ? "status-confirmed" : "status-pending";
-              const stLabel = r.status === "resolved" ? t("status.resolved") : t("status.pending");
-              html += `<tr>
-                <td>${r.id}</td>
-                <td style="max-width:300px">${r.reason}</td>
-                <td>${r.customer_name || "-"}</td>
-                <td>${r.customer_phone || "-"}</td>
-                <td class="${stCls}">${stLabel}</td>
-                <td style="font-size:.78rem">${r.created_at}</td>
-              </tr>`;
-            });
-            html += "</tbody></table>";
-            el.innerHTML = html;
-          }
-        } catch {
-          document.getElementById("supportTable").innerHTML =
-            `<p style="color:red">${t("admin.supportFailed")}</p>`;
-        }
-      }
-
-      async function updateStock(productId) {
-        const input = document.getElementById(`stock-input-${productId}`);
-        const newStock = parseInt(input.value, 10);
-        if (isNaN(newStock) || newStock < 0) {
-          alert(t("admin.badQty"));
-          return;
-        }
-        try {
-          const res = await fetch("/api/stock", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ product_id: productId, stock: newStock }),
-          });
-          const data = await res.json();
-          if (data.error) {
-            alert(t("common.error") + ": " + data.error);
-          } else {
-            alert(data.message);
-            loadAdmin();
-            loadProducts();
-          }
-        } catch {
-          alert(t("admin.updateFailed"));
-        }
-      }
-
-      // ── HEALTH ──────────────────────────────────────────────────
       async function loadHealth() {
         const rows = document.getElementById("healthRows");
         rows.innerHTML =
@@ -1506,10 +1250,11 @@
           const res = await fetch("/api/health");
           const data = await res.json();
 
-          const keys = ["postgres", "qdrant"];
+          const keys = ["postgres", "qdrant", "odoo"];
           const labels = {
             postgres: "PostgreSQL",
             qdrant: "Qdrant",
+            odoo: "Odoo",
           };
 
           rows.innerHTML = keys

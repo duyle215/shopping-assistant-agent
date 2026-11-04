@@ -88,6 +88,20 @@ def summary_text(p: dict) -> str:
     )
 
 
+def spec_line(p: dict) -> str:
+    """Mo ta ngan tren website Odoo: mot dong thong so, khong phu thuoc ngon ngu."""
+    storage = " / ".join(f"{s // 1024} TB" if s >= 1024 else f"{s} GB" for s in p["storage_gb"])
+    parts = [
+        p["chipset"],
+        f"RAM {p['ram_gb']} GB",
+        storage,
+        f'{p["screen_inch"]}" {p["refresh_rate_hz"]} Hz',
+        f"{p['battery_mah']} mAh" + (f" · {p['charging_w']} W" if p.get("charging_w") else ""),
+        f"{p['main_camera_mp']} MP",
+    ]
+    return " · ".join(parts)
+
+
 def embedding_text(p: dict) -> str:
     """Text de embed: ten + thong so tom tat + noi dung trang."""
     return f"{summary_text(p)}\n{p['description'][:3000]}"
@@ -104,7 +118,7 @@ def odoo_vals(p: dict) -> dict:
         "is_published": True,
         "list_price": p["price_vnd"],
         "taxes_id": [(6, 0, [])],  # gia ban le da gom VAT
-        "description_sale": summary_text(p),
+        "description_sale": spec_line(p),
         "is_phone": True,
         "phone_brand": p["brand"],
         "phone_model": p["model"],

@@ -11,3 +11,5 @@ echo "[setup] Installing shopping_assistant_chat in '$DB'..."
 odoo "${ARGS[@]}" -i shopping_assistant_chat -u shopping_assistant_chat --load-language vi_VN --stop-after-init --no-http
 echo "[setup] Configuring '$DB'..."
 SETUP_DB="$DB" odoo shell "${ARGS[@]}" --no-http < /setup/setup_odoo.py
+# This container runs as root to write ./odoo/secrets; hand the filestore back to the odoo user
+chown -R odoo:odoo /var/lib/odoo

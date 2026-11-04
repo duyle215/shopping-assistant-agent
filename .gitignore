@@ -32,3 +32,6 @@ data/crawl_urls.txt
 
 # Demo video working files
 docs/video/
+
+# Local copy of marked.js for demo recording where the CDN is blocked
+scripts/demo/package/
