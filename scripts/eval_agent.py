@@ -236,7 +236,7 @@ def judge(question: str, tool_outputs: list[str], answer: str, model: str) -> di
         except RateLimitError as exc:
             if attempt == 4:
                 raise
-            time.sleep(max(_retry_after(exc) or 0, 15.0 * attempt))
+            time.sleep(min(max(_retry_after(exc) or 0, 15.0 * attempt), 90.0))
 
 
 def _judge_once(client, Verdict, question, data, answer, model) -> dict:

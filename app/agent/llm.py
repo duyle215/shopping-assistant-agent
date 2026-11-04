@@ -20,6 +20,7 @@ from app.config import AGENT_API_KEY, AGENT_BASE_URL, LLM_MODEL
 logger = logging.getLogger("llm")
 
 _client: Optional[OpenAI] = None
+MAX_RETRY_WAIT = 90.0
 
 
 def client() -> OpenAI:
@@ -142,7 +143,9 @@ def chat(
             wait = delay
             if isinstance(exc, RateLimitError):
                 # Gioi han theo phut cua free tier: cho theo goi y cua provider neu co
-                wait = max(_retry_after(exc) or 0, 15.0 * attempt)
+                # Gioi han tren 90s: thong bao loi doi khi chua so khong phai thoi gian cho
+                wait = min(max(_retry_after(exc) or 0, 15.0 * attempt), MAX_RETRY_WAIT)
+                logger.warning(f"[LLM] 429: {str(exc)[:300]}")
             logger.warning(f"[LLM] {type(exc).__name__}, thu lai sau {wait:.0f}s")
             time.sleep(wait)
             delay *= 2
