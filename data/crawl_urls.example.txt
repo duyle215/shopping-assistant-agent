@@ -1,0 +1,11 @@
+# Danh sach trang san pham dien thoai de crawl (moi dong mot URL).
+# Copy file nay thanh data/crawl_urls.txt, dan URL trang san pham vao, roi chay:
+#   python scripts/crawl_pages.py --urls data/crawl_urls.txt --max-pages 50
+#
+# Script doc robots.txt va bo qua URL bi cam. Doc dieu khoan su dung cua tung web truoc khi crawl.
+# Goi y nguon (tu tim URL trang san pham tren cac web nay):
+#   https://www.thegioididong.com/dtdd
+#   https://cellphones.com.vn/mobile.html
+#   https://memoryzone.com.vn/
+#   https://gearvn.com/
+#   https://tinhocngoisao.com/

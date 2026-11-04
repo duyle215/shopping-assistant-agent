@@ -25,3 +25,4 @@ __pycache__/
 # Crawled pages (not committed: retailer content)
 data/crawled/
 data/catalog_crawled.jsonl
+data/crawl_urls.txt

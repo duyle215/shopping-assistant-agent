@@ -6,7 +6,8 @@ lay ton kho tu data/stock.json, roi:
   - PostgreSQL: moi thong so mot cot co kieu (bang products), tao lai bang orders/support_requests
   - Qdrant:     vector cua text san pham + payload thong so de loc (gia, hang, pin, RAM...)
 
-Chay:  python scripts/ingest_data.py [--catalog data/catalog.jsonl]
+Chay:  python scripts/ingest_data.py
+       python scripts/ingest_data.py --catalog data/catalog.jsonl data/catalog_crawled.jsonl
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ DEFAULT_STOCK = 10
 EMBED_BATCH = 16
 
 
-def load_catalog(path: str, stock_path: str) -> list[dict]:
+def load_catalog(paths: list[str], stock_path: str) -> list[dict]:
     from app.catalog import display_name
 
     stock: dict[str, int] = {}
@@ -40,25 +41,34 @@ def load_catalog(path: str, stock_path: str) -> list[dict]:
             stock = json.load(f)
 
     products, skipped = [], 0
-    with open(path, encoding="utf-8") as f:
-        for rec in map(json.loads, f):
-            if not rec.get("valid") or not rec.get("spec"):
-                skipped += 1
-                print(f"  Bo qua #{rec['id']} ({rec['source']}): {rec.get('problems')}")
-                continue
-            spec = rec["spec"]
-            products.append(
-                {
-                    "id": rec["id"],
-                    "name": display_name(spec["brand"], spec["model"]),
-                    "stock": int(stock.get(str(rec["id"]), DEFAULT_STOCK)),
-                    "description": rec["text"],
-                    "source": rec["source"],
-                    **spec,
-                }
-            )
+    seen: set[int] = set()
+    records = []
+    for path in paths:
+        with open(path, encoding="utf-8") as f:
+            records += [json.loads(line) for line in f if line.strip()]
+    for rec in records:
+        if rec["id"] in seen:
+            skipped += 1
+            print(f"  Bo qua #{rec['id']} ({rec['source']}): trung id")
+            continue
+        seen.add(rec["id"])
+        if not rec.get("valid") or not rec.get("spec"):
+            skipped += 1
+            print(f"  Bo qua #{rec['id']} ({rec['source']}): {rec.get('problems')}")
+            continue
+        spec = rec["spec"]
+        products.append(
+            {
+                "id": rec["id"],
+                "name": display_name(spec["brand"], spec["model"]),
+                "stock": int(stock.get(str(rec["id"]), DEFAULT_STOCK)),
+                "description": rec["text"],
+                "source": rec["source"],
+                **spec,
+            }
+        )
     if skipped:
-        print(f"  Da bo qua {skipped} ban ghi khong hop le")
+        print(f"  Da bo qua {skipped} ban ghi")
     return products
 
 
@@ -169,7 +179,7 @@ def ingest_qdrant(products: list[dict]) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--catalog", default="data/catalog.jsonl")
+    parser.add_argument("--catalog", nargs="+", default=["data/catalog.jsonl"])
     parser.add_argument("--stock", default="data/stock.json")
     args = parser.parse_args()
 
@@ -177,10 +187,11 @@ def main() -> None:
     print("  Shopping Assistant  |  Ingest Data")
     print("=" * 55)
 
-    if not os.path.exists(args.catalog):
-        sys.exit(f"Khong thay {args.catalog}. Chay scripts/extract_catalog.py truoc.")
+    for path in args.catalog:
+        if not os.path.exists(path):
+            sys.exit(f"Khong thay {path}. Chay scripts/extract_catalog.py truoc.")
     products = load_catalog(args.catalog, args.stock)
-    print(f"\nDoc {len(products)} san pham hop le tu {args.catalog}")
+    print(f"\nDoc {len(products)} san pham hop le tu {', '.join(args.catalog)}")
 
     print("\n[1/2] Nap du lieu vao PostgreSQL...")
     try:
@@ -197,6 +208,9 @@ def main() -> None:
         print(f"  Qdrant: da upsert {qd_count} vector vao collection '{QDRANT_COLLECTION}'")
     except Exception as e:
         print(f"  Qdrant FAIL: {e}")
+        if "already accessed" in str(e):
+            print("  -> Qdrant local chi cho 1 process mo. Tat app (run.py) roi chay lai,")
+            print("     hoac dung Qdrant server (QDRANT_URL, xem docker-compose.yml).")
         sys.exit(1)
 
     print()
