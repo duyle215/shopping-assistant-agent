@@ -79,7 +79,11 @@ def reset_state(catalog: dict[int, dict]) -> None:
 # KIEM TRA
 # ------------------------------------------------------------------
 def _norm(value):
-    return value.lower() if isinstance(value, str) else value
+    """So sanh khong phan biet hoa thuong; '15' va 15 la mot (model hay truyen so dang chuoi)."""
+    if isinstance(value, str):
+        v = value.strip().lower()
+        return int(v) if v.isdigit() else v
+    return value
 
 
 def rule_ok(actual, rule) -> bool:
@@ -93,7 +97,7 @@ def rule_ok(actual, rule) -> bool:
         if "in" in rule:
             return _norm(actual) in [_norm(v) for v in rule["in"]]
         if "contains" in rule:
-            return isinstance(actual, list) and all(v in actual for v in rule["contains"])
+            return isinstance(actual, list) and all(_norm(v) in [_norm(a) for a in actual] for v in rule["contains"])
         raise ValueError(f"Rule la: {rule}")
     return _norm(actual) == _norm(rule)
 
@@ -221,6 +225,20 @@ def judge(question: str, tool_outputs: list[str], answer: str, model: str) -> di
         polite: bool
 
     data = "\n\n".join(tool_outputs)[:8000] or "(no tool was called)"
+    from openai import RateLimitError
+
+    from app.agent.llm import _retry_after
+
+    for attempt in range(1, 5):
+        try:
+            return _judge_once(client, Verdict, question, data, answer, model)
+        except RateLimitError as exc:
+            if attempt == 4:
+                raise
+            time.sleep(max(_retry_after(exc) or 0, 15.0 * attempt))
+
+
+def _judge_once(client, Verdict, question, data, answer, model) -> dict:
     resp = client().chat.completions.parse(
         model=model,
         messages=[
