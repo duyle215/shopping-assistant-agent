@@ -25,7 +25,7 @@ async function adminCookies(browser) {
   await page.goto(`${ODOO}/web/login`);
   await page.fill("input[name=login]", "admin");
   await page.fill("input[name=password]", PASSWORD);
-  await page.click("button[type=submit]");
+  await page.press("input[name=password]", "Enter");
   await page.waitForURL(/\/odoo/);
   const cookies = await ctx.cookies();
   await ctx.close();
@@ -40,7 +40,7 @@ async function adminCookies(browser) {
   const ctx = await browser.newContext({ viewport: SIZE, recordVideo: { dir: OUT, size: SIZE } });
   if (MARKED) await ctx.route("**/marked*.js", (r) => r.fulfill({ body: MARKED, contentType: "application/javascript" }));
   const page = await ctx.newPage();
-  await page.goto(`${ODOO}${LANG === "vi" ? "/vi" : ""}/shop`);
+  await page.goto(`${ODOO}${LANG === "en" ? "/en" : ""}/shop`);
   await page.waitForTimeout(1500);
   await page.hover("#sa_chat_toggle");
   await page.waitForTimeout(500);
@@ -77,6 +77,8 @@ async function adminCookies(browser) {
   // staff side: the order is a confirmed sales order in Odoo
   await ctx.addCookies(staff);
   await page.goto(`${ODOO}/odoo/sales`);
+  // The default "My Quotations" filter hides orders made by the chatbot user
+  await page.locator(".o_searchview_facet .o_facet_remove").first().click();
   await page.locator(".o_data_row").first().waitFor();
   await page.waitForTimeout(1500);
   await page.locator(".o_data_row").first().click();

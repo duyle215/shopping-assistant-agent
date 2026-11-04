@@ -27,7 +27,7 @@ async function newPage(browser, height = 800) {
 
 async function shootWebsite(browser) {
   const [ctx, page] = await newPage(browser, 860);
-  await page.goto(`${ODOO}${LANG === "vi" ? "/vi" : ""}/shop`);
+  await page.goto(`${ODOO}${LANG === "en" ? "/en" : ""}/shop`);
   await page.click("#sa_chat_toggle");
   const chat = page.frameLocator("#sa_chat_panel iframe");
   await chat.locator("#userInput").fill(Q);
@@ -42,7 +42,7 @@ async function login(page) {
   await page.goto(`${ODOO}/web/login`);
   await page.fill("input[name=login]", "admin");
   await page.fill("input[name=password]", PASSWORD);
-  await page.click("button[type=submit]");
+  await page.press("input[name=password]", "Enter");
   await page.waitForURL(/\/odoo/);
 }
 
@@ -52,6 +52,8 @@ async function shootBackend(browser) {
 
   // Latest sales order created by the chatbot
   await page.goto(`${ODOO}/odoo/sales`);
+  // The default "My Quotations" filter hides orders made by the chatbot user
+  await page.locator(".o_searchview_facet .o_facet_remove").first().click();
   await page.locator(".o_data_row").first().waitFor();
   await page.locator(".o_data_row").first().click();
   await page.locator(".o_form_view").waitFor();
@@ -60,6 +62,7 @@ async function shootBackend(browser) {
 
   // CRM pipeline: support requests from the chat
   await page.goto(`${ODOO}/odoo/crm`);
+  await page.locator(".o_searchview_facet .o_facet_remove").first().click();  // "My Pipeline"
   await page.locator(".o_kanban_record").first().waitFor();
   await page.waitForTimeout(1000);
   await page.screenshot({ path: path.join(OUT, "odoo-crm.png") });

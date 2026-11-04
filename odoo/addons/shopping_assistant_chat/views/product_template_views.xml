@@ -16,7 +16,7 @@
                             <field name="phone_chipset" invisible="not is_phone"/>
                             <field name="phone_ram_gb" invisible="not is_phone"/>
                             <field name="phone_storage_gb" invisible="not is_phone"/>
-                            <field name="phone_release_year" invisible="not is_phone"/>
+                            <field name="phone_release_year" invisible="not is_phone" options="{'format': false}"/>
                         </group>
                         <group invisible="not is_phone">
                             <field name="phone_screen_inch"/>

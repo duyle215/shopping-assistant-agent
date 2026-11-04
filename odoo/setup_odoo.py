@@ -21,9 +21,16 @@ company.write({"name": "Phone Shop", "country_id": env.ref("base.vn").id})
 env["product.pricelist"].search([]).write({"currency_id": vnd.id})
 
 # --- Website: Vietnamese and English, chat widget URL ---
-vi = env["res.lang"]._activate_lang("vi_VN")
+# --load-language vi_VN on a new database leaves English inactive; keep both
+langs = env["res.lang"]._activate_lang("en_US") | env["res.lang"]._activate_lang("vi_VN")
 for website in env["website"].search([]):
-    website.write({"language_ids": [(4, vi.id)], "name": "Phone Shop"})
+    website.write(
+        {
+            "language_ids": [(4, lang.id) for lang in langs],
+            "default_lang_id": env.ref("base.lang_vi_VN").id,  # /shop in Vietnamese, /en/shop in English
+            "name": "Phone Shop",
+        }
+    )
 env["ir.config_parameter"].set_param("shopping_assistant_chat.app_url", app_url)
 
 

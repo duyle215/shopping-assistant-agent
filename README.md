@@ -17,7 +17,7 @@ Works with any OpenAI-compatible provider. Tested with Google Gemini's free tier
 | Spec extraction, field accuracy | **99.5%** (418/420) | [docs/extraction_eval.md](docs/extraction_eval.md) |
 | Search Hit@1, name / feature queries | 100% / 90% | [docs/search_eval.md](docs/search_eval.md) |
 | Prompt-injection attacks blocked | regex 17/20, LLM 19/20, both **20/20**; 0/15 benign messages blocked | [docs/guardrail_eval.md](docs/guardrail_eval.md) |
-| Overselling under concurrent orders, in Odoo | 8 buyers, 1 unit: 1 order confirmed in 5 of 5 rounds; **8 of 8** confirmed in every round with the product-row write removed | `tests/test_place_order.py` |
+| Overselling under concurrent orders, in Odoo | 8 buyers, 1 unit: 1 order confirmed in 5 of 5 rounds; **8 of 8** confirmed in every round with the product-row write removed | `tests/test_place_order.py` (3 rounds); 5-round measurement with and without the write |
 
 Measured with `gemini-3.5-flash-lite` on a 30-phone catalog; the conversation scenarios ran against Odoo 19 (`odoo_eval` database). The standalone version scored 37/40 in its clean run ([report](https://github.com/duyle215/shopping-assistant-agent/blob/ca3716b6d8d6b371719a4cc3c41ad87163d07808/docs/agent_eval.md)). The scenarios are written for this catalog and the judge is the same model, so treat the numbers as a regression baseline, not a benchmark. The Vietnamese regex patterns were added after a first run on the injection set (8/20 before), so the regex row is optimistic; the LLM row was not tuned on it.
 
