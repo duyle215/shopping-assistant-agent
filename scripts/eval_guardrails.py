@@ -40,9 +40,21 @@ def main() -> None:
 
         model = args.model or GUARD_MODEL or LLM_MODEL
         layers["llm"] = {}
+        from openai import APIStatusError, RateLimitError
+
+        def classify(text: str) -> bool:
+            for attempt in range(1, 6):
+                try:
+                    return classify_with_llm(text, model).injection
+                except (RateLimitError, APIStatusError) as exc:
+                    if attempt == 5 or (isinstance(exc, APIStatusError) and exc.status_code < 500 and not isinstance(exc, RateLimitError)):
+                        raise
+                    time.sleep(10 * attempt)
+            raise RuntimeError("unreachable")
+
         for t, _ in items:
-            layers["llm"][t] = classify_with_llm(t, model).injection
-            time.sleep(0.5)
+            layers["llm"][t] = classify(t)
+            time.sleep(1)
         layers["regex + llm"] = {t: layers["regex"][t] or layers["llm"][t] for t, _ in items}
 
     n_attack = len(data["attack"])
@@ -50,6 +62,7 @@ def main() -> None:
     lines = [
         "# Input guardrail evaluation",
         "",
+        *([f"LLM guard model: `{model}`", ""] if args.llm else []),
         f"Data: [`evals/injection.yaml`](../evals/injection.yaml), {n_attack} attacks and {n_benign} "
         "benign messages (several look suspicious on purpose, e.g. \"bỏ qua cái máy vừa rồi\", "
         "\"system update\", \"developer mode\").",
