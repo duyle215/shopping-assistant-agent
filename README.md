@@ -1,18 +1,18 @@
 # Shopping Assistant Agent
 
-A Vietnamese phone-shopping assistant built on **LangGraph**. Two agents hand off to each other to search, compare, check stock, take orders and escalate to staff. Orders wait for the customer's confirmation, and conversations are saved in PostgreSQL. The catalog comes from an **LLM structured-extraction pipeline**, and comparisons are computed in code, so the bot cannot misread or invent specs. Every claim is measured: extraction accuracy, search quality, guardrails, and 40 scripted conversations.
+A bilingual (Vietnamese / English) phone-shopping assistant built on **LangGraph**. Two agents hand off to each other to search, compare, check stock, take orders and escalate to staff. Orders wait for the customer's confirmation, and conversations are saved in PostgreSQL. The catalog comes from an **LLM structured-extraction pipeline**, and comparisons are computed in code, so the bot cannot misread or invent specs. Every claim is measured: extraction accuracy, search quality, guardrails, and 46 scripted conversations.
 
 Works with any OpenAI-compatible provider. Tested with OpenAI and with Google Gemini's free tier.
 
 ![Demo: filtered search, comparison built in code, order confirmation, staff view](docs/demo.gif)
 
-*35-second demo, recorded with Playwright against the Docker build ([MP4](docs/demo.mp4)): filtered search, a comparison table built in code, the order confirmation card, and the new order in the staff view.*
+*Demo recorded with Playwright against the Docker build ([MP4](docs/demo.mp4)): filtered search, a comparison table built in code, the order confirmation card, and the new order in the staff view. The same flow in Vietnamese: [GIF](docs/demo-vi.gif) · [MP4](docs/demo-vi.mp4).*
 
 ## Results
 
 | What | Result | Details |
 | --- | --- | --- |
-| Conversation task success, 40 scenarios | **92%** (37/40) in one clean run; **100%** after fixing the 3 failures it found | [clean run](https://github.com/duyle215/shopping-assistant-agent/blob/ca3716b6d8d6b371719a4cc3c41ad87163d07808/docs/agent_eval.md), [after fixes](docs/agent_eval.md) |
+| Conversation task success | **92%** (37/40) in one clean run; **100%** (46/46, incl. 6 English scenarios) after fixing the failures it found | [clean run](https://github.com/duyle215/shopping-assistant-agent/blob/ca3716b6d8d6b371719a4cc3c41ad87163d07808/docs/agent_eval.md), [after fixes](docs/agent_eval.md) |
 | Answers grounded in tool data (LLM judge) | 97% (37/38) | same reports |
 | Spec extraction, field accuracy | **99.5%** (418/420) | [docs/extraction_eval.md](docs/extraction_eval.md) |
 | Search Hit@1, name / feature queries | 100% / 90% | [docs/search_eval.md](docs/search_eval.md) |
@@ -32,25 +32,27 @@ Measured with `gemini-3.5-flash-lite` on a 30-phone catalog. The scenarios are w
 - **Hybrid search.** Structured filters (price, brand, RAM, battery, storage, refresh rate) and spec sorting for "the cheapest / the biggest battery", keyword search with `pg_trgm` and vector search in Qdrant, merged with Reciprocal Rank Fusion. When the embedding API fails, search falls back to keywords.
 - **Keeps answering when a quota runs out.** Rate limits are retried with the provider's suggested wait. When a model's daily quota is used up, calls switch to `LLM_FALLBACK_MODEL` until it resets; if nothing is left, the customer gets a polite "busy" message instead of an error.
 - **Tracing.** Every LLM call (latency, tokens), tool call and turn is stored and summarised in the System tab.
+- **Vietnamese and English.** A VI | EN switch in the UI; the language is sent with each request, so answers, comparison tables, fixed messages and number formats follow it. Claimed-action checks and evaluation scenarios cover both languages.
 - **MCP server.** The inventory tools are also exposed over the Model Context Protocol for other agents.
 
 ## Screenshots
 
 | Order confirmation (graph interrupt) | Filtered search |
 | --- | --- |
-| ![Order confirmation](docs/screenshots/chat-confirm.png) | ![Search with filters](docs/screenshots/chat-search.png) |
+| ![Order confirmation](docs/screenshots/en/chat-confirm.png) | ![Search with filters](docs/screenshots/en/chat-search.png) |
 
 | Out-of-scope question goes to staff | Staff view: orders and support requests |
 | --- | --- |
-| ![Order and human hand-off](docs/screenshots/chat-order.png) | ![Admin](docs/screenshots/admin.png) |
+| ![Order and human hand-off](docs/screenshots/en/chat-order.png) | ![Admin](docs/screenshots/en/admin.png) |
 
 | Catalog (typed specs) | System tab: traces from the last 24 hours |
 | --- | --- |
-| ![Products](docs/screenshots/products.png) | ![System](docs/screenshots/health.png) |
+| ![Products](docs/screenshots/en/products.png) | ![System](docs/screenshots/en/health.png) |
 
 Three-way comparison: the table and the ✓ marks are computed in code, the model only writes the commentary.
+Vietnamese versions of all screenshots are in [`docs/screenshots/`](docs/screenshots/).
 
-![Comparison](docs/screenshots/chat-compare.png)
+![Comparison](docs/screenshots/en/chat-compare.png)
 
 ## Architecture
 
@@ -141,7 +143,7 @@ The `confirm_order` node calls `interrupt()` with the order details. The UI show
 
 ### 6. Evaluation
 
-[`evals/scenarios.yaml`](evals/scenarios.yaml) holds 40 conversations in six groups: search, compare, order, support, multi-turn context and safety. Each turn can require or forbid tools, check tool arguments (`price_max <= 10000000`, `product_ids contains [3, 6]`), the answering agent, answer content, the confirmation card, and database changes after the scenario (orders, status, stock, support tickets). Every answer is also checked for prices that are not in the catalog.
+[`evals/scenarios.yaml`](evals/scenarios.yaml) holds 46 conversations in seven groups: search, compare, order, support, multi-turn context, safety, and English (the same flows with the UI set to English, plus a check that the answer really is in English). Each turn can require or forbid tools, check tool arguments (`price_max <= 10000000`, `product_ids contains [3, 6]`), the answering agent, answer content, the confirmation card, and database changes after the scenario (orders, status, stock, support tickets). Every answer is also checked for prices that are not in the catalog.
 
 [`scripts/eval_agent.py`](scripts/eval_agent.py) runs them on a separate database, retries after rate limits, and can add an LLM judge that compares the last answer with the data the tools returned (`--judge`). The judge uses the same model as the agent, so it can share its blind spots. Each report records the commit every scenario ran on.
 
@@ -270,9 +272,9 @@ python scripts/ingest_data.py --catalog data/catalog.jsonl data/catalog_crawled.
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | GET | `/` | Chat UI |
-| POST | `/api/chat` | `{"message", "session_id"}` → answer, agent, tools, warning, `pending_confirmation` |
+| POST | `/api/chat` | `{"message", "session_id", "lang"}` (`lang`: `vi` default or `en`) → answer, agent, tools, warning, `pending_confirmation` |
 | POST | `/api/chat/stream` | Same, as Server-Sent Events: `tool`, `token`, `reset`, `final` |
-| POST | `/api/chat/confirm` (`/stream`) | `{"session_id", "approved"}`: answer a pending order confirmation |
+| POST | `/api/chat/confirm` (`/stream`) | `{"session_id", "approved", "lang"}`: answer a pending order confirmation |
 | GET | `/api/products` | Catalog with typed specs |
 | GET / PATCH | `/api/stock` | Stock levels / update one product's stock |
 | GET | `/api/orders` | Orders |
@@ -317,7 +319,7 @@ Tests use a separate database (`shopping_assistant_test`, created automatically)
 ├── data/                       # Sample pages, gold labels, extracted catalog, stock
 ├── docs/                       # Evaluation reports and screenshots
 ├── tests/
-├── templates/index.html        # Single-page UI (streaming, confirmation card, stats)
+├── templates/index.html        # Single-page UI (VI/EN, streaming, confirmation card, stats)
 ├── .github/workflows/ci.yml
 ├── Dockerfile
 └── docker-compose.yml

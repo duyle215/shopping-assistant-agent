@@ -1374,7 +1374,7 @@
                 <td>${s.product_id}</td>
                 <td>${s.name}</td>
                 <td>${s.brand}</td>
-                <td>${Number(s.price).toLocaleString("vi-VN")} VND</td>
+                <td>${Number(s.price).toLocaleString(locale())} ₫</td>
                 <td><span class="stock-badge ${cls}" style="display:inline">${s.stock}</span></td>
                 <td>
                   <input type="number" id="stock-input-${s.product_id}" value="${s.stock}"
