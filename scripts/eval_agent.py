@@ -263,6 +263,11 @@ def main() -> None:
     parser.add_argument("--category")
     parser.add_argument("--judge", action="store_true", help="LLM giam khao cho luot cuoi moi kich ban")
     parser.add_argument("--judge-model", default=None)
+    parser.add_argument(
+        "--merge",
+        action="store_true",
+        help="Ghi de ket qua cac kich ban vua chay vao lan chay day du truoc (.cache) roi viet lai bao cao",
+    )
     parser.add_argument("--sleep", type=float, default=4.0, help="Nghi giua cac kich ban (giay)")
     args = parser.parse_args()
 
@@ -300,6 +305,7 @@ def main() -> None:
             reset_state(catalog)
             session = f"eval-{sc['id']}-{uuid.uuid4().hex[:6]}"
             fails: list[str] = []
+            answers: list[str] = []
             verdict = None
             try:
                 for i, turn in enumerate(sc["turns"], start=1):
@@ -307,6 +313,7 @@ def main() -> None:
                     had_pending = resp.pending_confirmation is not None
                     if had_pending and turn.get("confirm"):
                         resp = agent.confirm(session, turn["confirm"] == "approve")
+                    answers.append(resp.answer_markdown or "")
                     calls, outputs = turn_tool_calls(agent, session)
                     fails += [f"turn {i}: {f}" for f in check_turn(turn, resp, calls, had_pending, allowed)]
                 fails += [f"db: {f}" for f in check_db(sc.get("db") or {}, db_snapshot())]
@@ -341,6 +348,7 @@ def main() -> None:
                 "passed": passed,
                 "fails": fails,
                 "judge": verdict,
+                "answers": answers,
                 "turns": len(sc["turns"]),
                 "llm_calls": usage.calls,
                 "prompt_tokens": int(usage.pt),
@@ -359,10 +367,21 @@ def main() -> None:
             break
         time.sleep(args.sleep)
 
-    write_report(results, args, LLM_MODEL, time.time() - started)
+    rerun: list[str] = []
+    cache = os.path.join(ROOT, ".cache/agent_eval_results.json")
+    if args.merge and os.path.exists(cache):
+        with open(cache, encoding="utf-8") as f:
+            previous = json.load(f)
+        fresh = {r["id"]: r for r in results}
+        rerun = list(fresh)
+        order = [s["id"] for s in yaml.safe_load(open(args.scenarios, encoding="utf-8"))]
+        merged = {r["id"]: r for r in previous}
+        merged.update(fresh)
+        results = [merged[i] for i in order if i in merged]
+    write_report(results, args, LLM_MODEL, time.time() - started, rerun)
 
 
-def write_report(results: list[dict], args, model: str, seconds: float) -> None:
+def write_report(results: list[dict], args, model: str, seconds: float, rerun: list[str] | None = None) -> None:
     n = len(results)
     if not n:
         return
@@ -377,9 +396,19 @@ def write_report(results: list[dict], args, model: str, seconds: float) -> None:
         "# Agent evaluation",
         "",
         f"Model: `{model}` · Scenarios: {n} · Turns: {turns} · "
-        f"Run: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} ({seconds / 60:.0f} min)",
+        f"Run: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
+        + ("" if rerun else f" ({seconds / 60:.0f} min)"),
         "",
         f"**Task success: {passed}/{n} = {passed / n:.0%}** (a scenario passes only if every check in every turn passes)",
+        *(
+            [
+                "",
+                f"Merged report: {len(rerun)} scenarios were re-run after fixes and replace their results "
+                f"from the previous full run ({', '.join(rerun)}).",
+            ]
+            if rerun
+            else []
+        ),
         "",
         "| Category | Passed | Rate |",
         "| --- | ---: | ---: |",

@@ -224,7 +224,8 @@
     - user: "Nothing Phone 2a còn hàng không shop?"
       tools: [check_inventory]
       not_tools: [place_order]
-      contains_any: ["7"]
+      contains_any: ["còn hàng", "còn 7", "7 chiếc", "7 máy"]
+      not_contains: ["hết hàng"]
 
 - id: order-new-message-cancels-pending
   category: order
