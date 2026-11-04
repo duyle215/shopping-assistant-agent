@@ -4,7 +4,7 @@ Database tables (SQLAlchemy ORM). Dung chung cho app, scripts va tests.
 
 from __future__ import annotations
 
-from sqlalchemy import Column, DateTime, Float, Integer, Numeric, String, Text, func
+from sqlalchemy import Column, DateTime, Float, Integer, Numeric, String, Text, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import declarative_base
@@ -78,12 +78,23 @@ class Trace(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
+def ensure_extensions(engine: Engine) -> None:
+    """pg_trgm cho tim theo tu khoa (hybrid search). Bo qua neu khong co quyen."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+    except Exception:
+        pass
+
+
 def create_tables(engine: Engine) -> None:
     """Tao bang con thieu (khong xoa du lieu)."""
+    ensure_extensions(engine)
     Base.metadata.create_all(engine)
 
 
 def reset_db(engine: Engine) -> None:
     """Xoa va tao lai toan bo bang (dung khi nap lai du lieu mau)."""
+    ensure_extensions(engine)
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)

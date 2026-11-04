@@ -26,3 +26,6 @@ __pycache__/
 data/crawled/
 data/catalog_crawled.jsonl
 data/crawl_urls.txt
+
+# Local caches (eval embeddings)
+.cache/

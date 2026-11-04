@@ -1,0 +1,45 @@
+# Truy van danh gia tim kiem. expected: product_id dung (bat ky id nao trong danh sach).
+# name: tim theo ten may (nguoi dung go ten, co khi viet tat / khong dau)
+# need: tim theo nhu cau / tinh nang co trong mo ta san pham
+name:
+  - {query: "iPhone 15 Pro Max", expected: [1]}
+  - {query: "iphone 15", expected: [2]}
+  - {query: "iPhone 16 Pro", expected: [3]}
+  - {query: "ip 16", expected: [4]}
+  - {query: "iPhone 13", expected: [5]}
+  - {query: "S24 Ultra", expected: [6]}
+  - {query: "galaxy s24", expected: [7]}
+  - {query: "Z Fold 6", expected: [8]}
+  - {query: "Flip6", expected: [9]}
+  - {query: "A55", expected: [10]}
+  - {query: "galaxy a35", expected: [11]}
+  - {query: "samsung a15", expected: [12]}
+  - {query: "Xiaomi 14 Ultra", expected: [13]}
+  - {query: "xiaomi 14", expected: [14]}
+  - {query: "redmi note 13 pro", expected: [15]}
+  - {query: "Redmi Note 13", expected: [16]}
+  - {query: "redmi 13c", expected: [17]}
+  - {query: "poco x6 pro", expected: [18]}
+  - {query: "Find X8", expected: [19]}
+  - {query: "reno 12", expected: [20]}
+  - {query: "oppo a58", expected: [21]}
+  - {query: "vivo v30", expected: [22]}
+  - {query: "Y36", expected: [23]}
+  - {query: "pixel 8 pro", expected: [24]}
+  - {query: "Pixel 8a", expected: [25]}
+  - {query: "realme 12 pro plus", expected: [26]}
+  - {query: "realme c67", expected: [27]}
+  - {query: "honor x9b", expected: [28]}
+  - {query: "nothing phone 2a", expected: [29]}
+  - {query: "rog phone 8", expected: [30]}
+need:
+  - {query: "điện thoại chơi game màn hình 165Hz", expected: [30]}
+  - {query: "camera Leica", expected: [13, 14]}
+  - {query: "camera Hasselblad", expected: [19]}
+  - {query: "điện thoại màn hình gập", expected: [8, 9]}
+  - {query: "thiết kế trong suốt có đèn", expected: [29]}
+  - {query: "cập nhật phần mềm 7 năm, Android thuần", expected: [24]}
+  - {query: "pin silicon-carbon, màn hình chống rơi vỡ", expected: [28]}
+  - {query: "khoanh tròn để tìm kiếm, phiên dịch trực tiếp", expected: [6]}
+  - {query: "chụp chân dung có vòng sáng Aura", expected: [22]}
+  - {query: "camera tele tiềm vọng zoom quang 3x", expected: [26]}
