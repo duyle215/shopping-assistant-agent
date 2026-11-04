@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from openai import OpenAI
 
 from app.config import AGENT_API_KEY, AGENT_BASE_URL, LLM_MODEL, MAX_ITERATIONS
-from app.guardrails import check_input, check_output
+from app.guardrails import check_input, check_output, unbacked_action_claims
 from app.sessions import SessionStore
 from app.agent.schemas import AgentResponse
 from app.agent.prompts import HANDOFF_MAP, build_agent_configs
@@ -37,6 +37,9 @@ logger = logging.getLogger("agent")
 # BUILD AGENT CONFIGS (lien ket prompts + tool defs)
 # ------------------------------------------------------------------
 AGENT_CONFIGS = build_agent_configs(TOOL_DEFS)
+
+# Tool can session_id that cua cuoc hoi thoai
+SESSION_TOOLS = {"request_human_support", "save_customer_info"}
 
 
 # ------------------------------------------------------------------
@@ -91,6 +94,7 @@ class ShoppingAgent:
         tools_called: list[str] = []
         tool_outputs: list[str] = []  # du lieu tool tra ve, de doi chieu so lieu
         number_check_retried = False
+        action_check_retried = False
         warning: str | None = None
 
         # ====== AGENT LOOP ======
@@ -111,6 +115,28 @@ class ShoppingAgent:
             # ---- LLM tra ve van ban (ket thuc loop) ----
             if not msg.tool_calls:
                 answer = msg.content or ""
+
+                # Noi "da dat hang" / "nhan vien se lien he" thi phai that su goi tool
+                claims = unbacked_action_claims(answer, tools_called)
+                if claims and not action_check_retried:
+                    action_check_retried = True
+                    logger.warning(f"[ActionCheck] Noi da lam nhung chua goi: {claims}")
+                    messages.append({"role": "assistant", "content": answer})
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "[He thong] Cau tra loi noi da thuc hien hanh dong nhung luot nay "
+                                f"chua goi tool: {', '.join(claims)}. Neu can thuc hien, hay goi "
+                                "tool do roi tra loi lai. Neu viec do da lam o luot truoc, tra loi "
+                                "lai va noi ro la da tao tu truoc."
+                            ),
+                        }
+                    )
+                    continue
+                if claims:
+                    warning = f"Cau tra loi noi da {', '.join(claims)} nhung khong goi tool"
+                    logger.warning(f"[ActionCheck] {warning}")
 
                 # Cau tra loi so sanh: moi con so phai co trong du lieu tool tra ve
                 if "compare_products" in tools_called:
@@ -191,6 +217,9 @@ class ShoppingAgent:
                     continue
 
                 # -- Thuc thi tool --
+                # session_id do server gan, model khong biet (va khong duoc bia) gia tri nay
+                if fn_name in SESSION_TOOLS:
+                    fn_args["session_id"] = session_id
                 tools_called.append(fn_name)
                 dispatch_fn = TOOL_DISPATCH.get(fn_name)
                 if dispatch_fn:

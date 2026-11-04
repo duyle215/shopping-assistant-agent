@@ -109,3 +109,34 @@ def check_output(response: str) -> GuardrailResult:
             )
 
     return GuardrailResult(passed=True)
+
+
+# ------------------------------------------------------------------
+# ACTION CLAIMS: cau tra loi noi da lam viec gi thi phai co tool tuong ung
+# ------------------------------------------------------------------
+# Vd model viet "nhan vien se lien he lai" nhung khong goi request_human_support:
+# khach tuong da duoc chuyen cho nhan vien, nhung khong co yeu cau nao duoc tao.
+ACTION_CLAIMS: dict[str, list[str]] = {
+    "request_human_support": [
+        r"nh[âa]n vi[êe]n (s[ẽe] |đ[ãa] )?(li[êe]n h[ệe]|g[ọo]i l[ạa]i|g[ọo]i cho)",
+        r"(k[ếe]t n[ốo]i|chuy[ểe]n)[^.\n]{0,40}nh[âa]n vi[êe]n",
+        r"(đ[ãa]|da) (g[ửu]i|t[ạa]o|ghi nh[ậa]n) y[êe]u c[ầa]u h[ỗo] tr[ợo]",
+    ],
+    "place_order": [
+        r"(đ[ãa]|da) (đ[ặa]t|ghi nh[ậa]n)[^.\n]{0,40}(đ[ơo]n|th[àa]nh c[ôo]ng)",
+        r"đ[ặa]t h[àa]ng th[àa]nh c[ôo]ng",
+        r"đ[ơo]n h[àa]ng[^.\n]{0,30}(đ[ãa] )?(đư[ợo]c )?(ghi nh[ậa]n|x[áa]c nh[ậa]n)",
+    ],
+}
+
+
+def unbacked_action_claims(answer: str, tools_called: list[str]) -> list[str]:
+    """Tra ve ten tool ma cau tra loi noi la da lam nhung luot nay khong goi."""
+    text = answer.lower()
+    missing = []
+    for tool, patterns in ACTION_CLAIMS.items():
+        if tool in tools_called:
+            continue
+        if any(re.search(p, text) for p in patterns):
+            missing.append(tool)
+    return missing

@@ -337,10 +337,6 @@ REQUEST_HUMAN_SUPPORT_DEF = {
                     "type": "string",
                     "description": "Ly do can ho tro nhan vien",
                 },
-                "session_id": {
-                    "type": "string",
-                    "description": "Session ID cua cuoc hoi thoai",
-                },
                 "customer_name": {
                     "type": "string",
                     "description": "Ho ten khach hang (neu da biet)",
@@ -382,10 +378,6 @@ SAVE_CUSTOMER_INFO_DEF = {
                 "product_id": {
                     "type": "integer",
                     "description": "ID san pham (chi can khi context='order')",
-                },
-                "session_id": {
-                    "type": "string",
-                    "description": "Session ID (chi can khi context='support')",
                 },
             },
             "required": ["customer_name", "customer_phone", "context"],
